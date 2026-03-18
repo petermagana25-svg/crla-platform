@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react"; // ✅ added useState
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -26,6 +30,7 @@ import {
   Star,
   Clock3,
 } from "lucide-react";
+
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 
@@ -152,105 +157,120 @@ function QuickAction({
 }
 
 export default function AgentDashboardPage() {
-  return (
-    <main className="min-h-screen bg-[var(--navy-dark)] text-white">
-      <Navbar />
+  const router = useRouter();
 
-      <Container>
-        <div className="py-10 lg:py-14">
-          <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    checkProfile();
+  }, []);
+
+  async function checkProfile() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (error || !data) {
+      router.push("/onboarding");
+    } else {
+      setProfile(data);
+    }
+  }
+
+return (
+  <main className="min-h-screen bg-[var(--navy-dark)] text-white">
+    <Navbar />
+
+    <Container>
+      <div className="py-10 lg:py-14">
+        <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+
             {/* SIDEBAR */}
-            <aside className="space-y-6">
-              <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_25px_70px_rgba(0,0,0,.28)]">
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                    <img
-                      src="/images/agent-1.jpg"
-                      alt="Agent profile"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+<aside className="space-y-6">
+  <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_25px_70px_rgba(0,0,0,.28)]">
 
-                  <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">
-                      Certified Agent
-                    </p>
-                    <h2 className="mt-1 truncate text-xl font-semibold">
-                      James Walker
-                    </h2>
-                    <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--gold-main)]/25 bg-[rgba(212,175,55,0.10)] px-3 py-1 text-xs font-medium text-[var(--gold-main)]">
-                      <ShieldCheck size={14} />
-                      Gold Member
-                    </div>
-                  </div>
-                </div>
+    {/* PROFILE BLOCK */}
+    <div className="flex items-center gap-4">
+      <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <img
+src={
+  profile?.avatar_url ||
+  "https://i.pravatar.cc/300"
+}
+          alt="Agent profile"
+          className="h-full w-full object-cover"
+        />
+      </div>
 
-                <div className="mt-6 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] p-4">
-                  <p className="text-sm text-white/55">Certification Status</p>
-                  <p className="mt-2 text-lg font-semibold text-white">
-                    Verified & Active
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--text-muted)]">
-                    Renewal due on Dec 18, 2026
-                  </p>
-                </div>
-              </div>
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/40">
+          Certified Agent
+        </p>
 
-              <div className="rounded-[32px] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
-                <div className="space-y-2">
-                  <SidebarItem
-                    icon={<LayoutDashboard size={18} />}
-                    label="Dashboard"
-                    active
-                  />
-                  <SidebarItem
-                    icon={<Home size={18} />}
-                    label="My Listings"
-                  />
-                  <SidebarItem
-                    icon={<Inbox size={18} />}
-                    label="Leads"
-                  />
-                  <SidebarItem
-                    icon={<GraduationCap size={18} />}
-                    label="Academy"
-                  />
-                  <SidebarItem
-                    icon={<Award size={18} />}
-                    label="Certification Path"
-                  />
-                  <SidebarItem
-                    icon={<BarChart3 size={18} />}
-                    label="Performance Metrics"
-                  />
-                  <SidebarItem
-                    icon={<Megaphone size={18} />}
-                    label="Marketing Assets"
-                  />
-                  <SidebarItem
-                    icon={<User size={18} />}
-                    label="Profile Settings"
-                  />
-                  <SidebarItem
-                    icon={<CreditCard size={18} />}
-                    label="Billing & Plan"
-                  />
-                </div>
+        <h2 className="mt-1 truncate text-xl font-semibold">
+          {profile?.full_name || "Your Name"}
+        </h2>
 
-                <div className="mt-5 border-t border-white/10 pt-5">
-                  <div className="space-y-2">
-                    <SidebarItem
-                      icon={<HelpCircle size={18} />}
-                      label="Help & Support"
-                    />
-                    <SidebarItem
-                      icon={<LogOut size={18} />}
-                      label="Logout"
-                    />
-                  </div>
-                </div>
-              </div>
-            </aside>
+        <p className="text-xs text-white/50 mt-1">
+          {profile?.city || "City not set"}
+        </p>
+
+        <p className="text-xs text-white/40 mt-1">
+          License #{profile?.license_number || "—"}
+        </p>
+      </div>
+    </div>
+
+    {/* EDIT PROFILE BUTTON */}
+    <Link
+      href="/onboarding"
+      className="mt-5 inline-flex w-full justify-center rounded-xl border border-[var(--gold-main)]/30 px-4 py-2 text-sm font-semibold text-[var(--gold-main)] hover:bg-[rgba(212,175,55,0.08)] transition"
+    >
+      Update My Profile
+    </Link>
+
+    {/* CERTIFICATION BLOCK */}
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] p-4">
+      <p className="text-sm text-white/55">Certification Status</p>
+      <p className="mt-2 text-lg font-semibold text-white">
+        Verified & Active
+      </p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        Renewal due on Dec 18, 2026
+      </p>
+    </div>
+  </div>
+
+  {/* NAVIGATION */}
+  <div className="rounded-[32px] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
+    <div className="space-y-2">
+      <SidebarItem icon={<LayoutDashboard size={18} />} label="Dashboard" active />
+      <SidebarItem icon={<Home size={18} />} label="My Listings" />
+      <SidebarItem icon={<Inbox size={18} />} label="Leads" />
+      <SidebarItem icon={<GraduationCap size={18} />} label="Academy" />
+      <SidebarItem icon={<Award size={18} />} label="Certification Path" />
+      <SidebarItem icon={<BarChart3 size={18} />} label="Performance Metrics" />
+      <SidebarItem icon={<Megaphone size={18} />} label="Marketing Assets" />
+      <SidebarItem icon={<User size={18} />} label="Profile Settings" />
+      <SidebarItem icon={<CreditCard size={18} />} label="Billing & Plan" />
+    </div>
+
+    <div className="mt-5 border-t border-white/10 pt-5">
+      <div className="space-y-2">
+        <SidebarItem icon={<HelpCircle size={18} />} label="Help & Support" />
+        <SidebarItem icon={<LogOut size={18} />} label="Logout" />
+      </div>
+    </div>
+  </div>
+</aside>
 
             {/* MAIN */}
             <section className="space-y-8">
@@ -262,8 +282,9 @@ export default function AgentDashboardPage() {
                       Agent Growth Hub
                     </p>
                     <h1 className="mt-3 text-4xl font-bold md:text-5xl">
-                      Welcome back, James
-                    </h1>
+  Welcome back, {profile?.full_name || "Agent"}
+</h1>
+
                     <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--text-muted)]">
                       Track your exposure, grow your professional profile, access
                       training, and monitor how the platform is helping your business.

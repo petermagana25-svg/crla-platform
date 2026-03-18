@@ -5,7 +5,7 @@ import Container from "@/components/layout/Container";
 
 function StatCard({ value, title }: { value: string; title: string }) {
   return (
-    <div className="group rounded-3xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-xl transition-all duration-300 hover:-translate-y-2 hover:bg-white/10 hover:shadow-[0_25px_60px_rgba(0,0,0,.35)]">
+    <div className="premium-card glass rounded-3xl p-8 text-center">
       <p className="text-4xl font-bold text-[var(--gold-main)]">{value}</p>
       <p className="mt-3 text-sm text-[var(--text-muted)]">{title}</p>
     </div>
@@ -15,17 +15,18 @@ function StatCard({ value, title }: { value: string; title: string }) {
 export default function HomePage() {
   return (
     <main className="bg-[var(--navy-dark)] text-white">
+
       <Navbar />
 
       {/* HERO */}
       <section className="relative overflow-hidden pt-24 pb-28 md:pt-28 md:pb-36">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(212,175,55,0.15),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(31,64,114,0.35),transparent_35%)]" />
-
-        <Container className="relative z-10">
+        <Container>
           <div className="grid items-start gap-16 lg:grid-cols-2">
 
             {/* LEFT */}
             <div className="flex flex-col">
+
+              {/* 🧠 HOMEOWNER HEADLINE */}
               <h1 className="max-w-2xl text-5xl font-bold leading-[1.1] md:text-7xl">
                 Renovate Now.<br/>
                 Pay at Closing.<br/>
@@ -40,62 +41,86 @@ export default function HomePage() {
                 maximizing value without upfront renovation costs.
               </p>
 
+              {/* 🔥 CTA STACK */}
               <div className="mt-14 flex flex-col items-start gap-4">
-                <Link href="/directory" className="group inline-flex h-12 items-center gap-2 rounded-full bg-[var(--gold-main)] px-8 font-semibold text-black transition-all duration-300 hover:-translate-y-1 hover:bg-[var(--gold-soft)] hover:shadow-[0_15px_45px_rgba(212,175,55,.35)] active:scale-95">
+
+                {/* PRIMARY */}
+                <Link
+                  href="/directory"
+                  className="btn-gold inline-flex h-12 items-center gap-2 rounded-full px-8"
+                >
                   Find an Agent Near You
-                  <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
+                  <ArrowRight size={18} />
                 </Link>
 
-                <Link href="/how-it-works" className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 bg-white/5 px-8 font-semibold text-white backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:bg-white/10 hover:shadow-[0_10px_30px_rgba(0,0,0,.25)]">
+                {/* SECONDARY */}
+                <Link
+                  href="/how-it-works"
+                  className="btn-glass inline-flex h-12 items-center justify-center rounded-full px-8"
+                >
                   How It Works
                 </Link>
 
+                {/* 👇 SEGMENT SWITCH */}
                 <span className="pt-4 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
                   For Real Estate Professionals
                 </span>
 
-                <Link href="/get-certified" className="inline-flex h-12 items-center justify-center rounded-full border border-[var(--gold-main)]/30 bg-[rgba(212,175,55,0.08)] px-8 font-semibold text-[var(--gold-main)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:bg-[rgba(212,175,55,0.18)] hover:shadow-[0_10px_30px_rgba(212,175,55,.15)]">
+                {/* 🔥 AGENT ACQUISITION CTA */}
+                <Link
+                  href="/get-certified"
+                  className="gold-halo inline-flex h-12 items-center justify-center rounded-full border border-[var(--gold-main)]/30 px-8 text-[var(--gold-main)] hover-glow transition"
+                >
                   Become a Certified Agent
                 </Link>
+
+                {/* 👇 LOGIN (LOW PRIORITY) */}
+                <Link
+                  href="/login"
+                  className="text-sm text-white/60 hover:text-white transition"
+                >
+                  Already certified? Access your dashboard →
+                </Link>
+
               </div>
 
+              {/* ICON BENEFITS */}
               <div className="mt-14 flex flex-wrap gap-8 text-sm text-[var(--text-muted)]">
-                <span className="inline-flex items-center gap-2 transition-colors hover:text-white">
+                <span className="flex items-center gap-2 hover:text-white transition">
                   <ShieldCheck size={16} className="text-[var(--gold-main)]" />
                   Certified renovation specialists
                 </span>
-                <span className="inline-flex items-center gap-2 transition-colors hover:text-white">
+                <span className="flex items-center gap-2 hover:text-white transition">
                   <Hammer size={16} className="text-[var(--gold-main)]" />
                   Smart pre-sale improvements
                 </span>
-                <span className="inline-flex items-center gap-2 transition-colors hover:text-white">
+                <span className="flex items-center gap-2 hover:text-white transition">
                   <BadgeDollarSign size={16} className="text-[var(--gold-main)]" />
                   Pay-at-closing flexibility
                 </span>
               </div>
+
             </div>
 
-            {/* RIGHT */}
+            {/* RIGHT IMAGE */}
             <div className="relative">
               <div className="overflow-hidden rounded-[40px] border border-white/10 shadow-[0_60px_160px_rgba(0,0,0,.55)]">
                 <img
                   src="/images/hero-house-california.jpg"
-                  alt="Beautiful renovated California home ready for sale"
-                  className="aspect-[4/3] w-full object-cover"
+                  alt="Renovated California home"
+                  className="aspect-[4/3] w-full object-cover transition duration-700 hover:scale-105"
                 />
               </div>
 
-              {/* BIG ROUND BADGE */}
               <div className="absolute -bottom-16 -left-16 hidden md:block">
-                <div className="relative h-44 w-44 rounded-full bg-white shadow-[0_20px_60px_rgba(0,0,0,.45)] ring-8 ring-[rgba(212,175,55,0.25)] flex items-center justify-center">
+                <div className="gold-halo h-44 w-44 rounded-full bg-white shadow-[0_20px_60px_rgba(0,0,0,.45)] ring-8 ring-[rgba(212,175,55,0.25)] flex items-center justify-center">
                   <img
                     src="/images/branding/crla-logo.jpg"
-                    alt="CRLA Certification Badge"
+                    alt="CRLA Badge"
                     className="h-32 w-32 object-contain rounded-full"
                   />
                 </div>
               </div>
-
             </div>
 
           </div>
@@ -106,73 +131,77 @@ export default function HomePage() {
       <section className="border-y border-white/10 bg-white/[0.02] py-16 backdrop-blur-xl">
         <Container>
           <div className="grid gap-10 md:grid-cols-3">
-            <StatCard value="+26%" title="More buyer interest for well-prepared homes" />
-            <StatCard value="Faster Sales" title="Homes that show better attract quicker offers" />
-            <StatCard value="Stronger Offers" title="Buyers compete more for move-in ready homes" />
+            <StatCard value="+26%" title="More buyer interest" />
+            <StatCard value="Faster Sales" title="Homes sell quicker" />
+            <StatCard value="Stronger Offers" title="Higher competition" />
           </div>
         </Container>
       </section>
+      {/* TESTIMONIAL / RESULTS */}
+<section className="py-24">
+  <Container>
+    <div className="text-center mb-16">
+      <h2 className="text-4xl font-bold md:text-5xl">
+        Real Results from Smart Renovation Strategy
+      </h2>
+      <p className="mt-4 text-[var(--text-muted)]">
+        Properties prepared strategically don’t just sell — they outperform.
+      </p>
+    </div>
 
-      {/* VALUE */}
-      <section className="py-28">
-        <Container>
-          <div className="grid items-center gap-20 lg:grid-cols-2">
-            <div>
-              <h2 className="text-4xl font-bold md:text-5xl">
-                Your Home Might Be
-                <span className="text-[var(--gold-main)]"> Undervalued</span>
-              </h2>
-              <p className="mt-8 text-lg leading-8 text-[var(--text-muted)]">
-                Many sellers list too early and miss the opportunity to present their property at its full potential.
-              </p>
-            </div>
+    <div className="grid gap-10 md:grid-cols-3">
 
-            <div className="overflow-hidden rounded-[40px] border border-white/10 shadow-[0_40px_120px_rgba(0,0,0,.45)]">
-              <img src="/images/kitchen-before-after.jpg" alt="Kitchen renovation comparison" className="aspect-[4/3] w-full object-cover" />
-            </div>
+      {[
+        {
+          img: "/images/house-1.jpg",
+          text: "Sold in 4 days after strategic renovation upgrades",
+        },
+        {
+          img: "/images/house-2.jpg",
+          text: "Received 5 competing offers above asking price",
+        },
+        {
+          img: "/images/house-3.jpg",
+          text: "Transformed listing led to 30% more buyer interest",
+        },
+      ].map((item, i) => (
+        <div
+          key={i}
+          className="group overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur transition hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(0,0,0,.4)]"
+        >
+          <div className="aspect-[4/3] overflow-hidden">
+            <img
+              src={item.img}
+              className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+            />
           </div>
-        </Container>
-      </section>
 
-      {/* TESTIMONIALS */}
-      <section className="bg-[linear-gradient(180deg,#0f1a31,#0b1426)] py-28">
-        <Container>
-          <div className="text-center">
-            <h2 className="text-4xl font-bold md:text-5xl">Real Sellers. Real Results.</h2>
-            <p className="mt-6 text-lg text-[var(--text-muted)]">
-              California homeowners who prepared before listing saw remarkable outcomes.
+          <div className="p-6 text-center">
+            <p className="text-sm text-[var(--text-muted)]">
+              {item.text}
             </p>
           </div>
+        </div>
+      ))}
 
-          <div className="mt-20 grid gap-10 md:grid-cols-2 lg:grid-cols-3">
-            {[
-              ["/images/testimonial-house-1.jpg","We sold in just 4 days and received multiple offers above asking.","Sarah M.","San Diego, CA"],
-              ["/images/testimonial-house-2.jpg","The upgrades paid for themselves. Buyers loved the presentation.","Daniel R.","Los Angeles, CA"],
-              ["/images/testimonial-house-3.jpg","We got $38,000 more than our original expected selling price.","Linda K.","San Jose, CA"]
-            ].map(([img,quote,name,loc],i)=>(
-              <div key={i} className="group rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-xl transition-all duration-300 hover:-translate-y-2 hover:bg-white/10 hover:shadow-[0_25px_60px_rgba(0,0,0,.35)]">
-                <div className="mb-6 overflow-hidden rounded-2xl">
-                  <img src={img as string} alt="Customer home" className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-105"/>
-                </div>
-                <p className="text-lg leading-8 text-white/90">“{quote}”</p>
-                <p className="mt-6 font-semibold text-white">{name}</p>
-                <p className="text-sm text-[var(--text-muted)]">{loc}</p>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </section>
+    </div>
+  </Container>
+</section>
 
       {/* FINAL CTA */}
       <section className="py-28">
         <Container>
-          <div className="rounded-[48px] border border-white/10 bg-gradient-to-br from-[#162544] to-[#0b1426] p-16 text-center shadow-[0_40px_120px_rgba(0,0,0,.45)] backdrop-blur-xl">
+          <div className="glass-strong rounded-[48px] p-16 text-center shadow-[0_40px_120px_rgba(0,0,0,.45)]">
             <h2 className="text-4xl font-bold md:text-5xl">Ready to Sell Smarter?</h2>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-[var(--text-muted)]">
-              Connect with a Certified Renovation Listing Agent and discover how to position your home for stronger offers.
+              Connect with a certified agent and position your home for stronger offers.
             </p>
-            <Link href="/directory" className="mt-10 inline-flex items-center gap-2 rounded-full bg-[var(--gold-main)] px-10 py-5 font-semibold text-black transition-all duration-300 hover:-translate-y-1 hover:bg-[var(--gold-soft)] hover:shadow-[0_25px_70px_rgba(212,175,55,.35)] active:scale-95">
-              Find an Agent Near You
+
+            <Link
+              href="/directory"
+              className="btn-gold mt-10 inline-flex items-center gap-2 rounded-full px-10 py-5"
+            >
+              Find an Agent
               <ArrowRight />
             </Link>
           </div>

@@ -2,52 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================= */
+/* 🎨 DESIGN TOKENS (PREMIUM) */
+/* ============================= */
+
 :root {
   --navy-dark: #0B1426;
   --navy-mid: #111C36;
   --navy-soft: #1B2A4A;
+
   --gold-main: #D4AF37;
   --gold-soft: #F0D77A;
+
   --text-light: #F8FAFC;
   --text-muted: #94A3B8;
+
+  --border-subtle: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+
+  --glass-bg: rgba(255,255,255,0.05);
+  --glass-strong: rgba(255,255,255,0.08);
+
+  --shadow-deep: 0 30px 80px rgba(0,0,0,0.45);
+  --shadow-soft: 0 10px 30px rgba(0,0,0,0.35);
+
+  --gold-glow: rgba(212,175,55,0.25);
 }
+
+/* ============================= */
+/* 🌍 BASE */
+/* ============================= */
 
 body {
   margin: 0;
   padding: 0;
-  background: var(--navy-dark);
+  background: radial-gradient(circle at top, #13203f, var(--navy-dark) 40%);
   color: var(--text-light);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-/* ===== PREMIUM UI EFFECTS ===== */
+
+/* ============================= */
+/* 🧊 GLASS SYSTEM */
+/* ============================= */
 
 .glass {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-subtle);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass-strong);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--border-strong);
 }
 
+/* ============================= */
+/* 💎 PREMIUM CARD SYSTEM */
+/* ============================= */
+
 .premium-card {
-  transition: all 0.35s ease;
+  transition: all 0.35s cubic-bezier(.25,.8,.25,1);
+  position: relative;
 }
 
 .premium-card:hover {
   transform: translateY(-6px);
-  box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(212, 175, 55, 0.15);
+  box-shadow: var(--shadow-deep);
+  border-color: rgba(212,175,55,0.25);
 }
+
+/* ============================= */
+/* ✨ GOLD LIGHT SYSTEM */
+/* ============================= */
 
 .gold-halo {
   position: relative;
+  z-index: 0;
 }
 
 .gold-halo::before {
@@ -56,16 +90,101 @@ body {
   inset: -2px;
   border-radius: inherit;
   background: radial-gradient(circle at center,
-    rgba(212, 175, 55, 0.35),
-    rgba(212, 175, 55, 0.15),
+    rgba(212,175,55,0.35),
+    rgba(212,175,55,0.15),
     transparent 65%);
+  filter: blur(20px);
+  opacity: 0.65;
   z-index: -1;
-  filter: blur(18px);
-  opacity: 0.7;
 }
 
-.soft-glow {
+/* ============================= */
+/* 🔥 HOVER GLOW (SUBTLE) */
+/* ============================= */
+
+.hover-glow {
+  transition: all 0.3s ease;
+}
+
+.hover-glow:hover {
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.4),
-    0 0 60px rgba(212, 175, 55, 0.12);
+    0 0 0 1px rgba(212,175,55,0.2),
+    0 0 25px rgba(212,175,55,0.12),
+    0 20px 40px rgba(0,0,0,0.45);
+}
+
+/* ============================= */
+/* 🎯 INPUT SYSTEM */
+/* ============================= */
+
+.input-premium {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.25s ease;
+}
+
+.input-premium:focus {
+  border-color: var(--gold-main);
+  box-shadow:
+    0 0 0 1px rgba(212,175,55,0.25),
+    0 0 18px rgba(212,175,55,0.12);
+}
+
+/* ============================= */
+/* 🚀 BUTTON SYSTEM */
+/* ============================= */
+
+.btn-gold {
+  background: var(--gold-main);
+  color: black;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  background: var(--gold-soft);
+  box-shadow:
+    0 10px 30px rgba(212,175,55,0.25);
+}
+
+.btn-glass {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.25s ease;
+}
+
+.btn-glass:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--border-strong);
+}
+
+/* ============================= */
+/* 🌊 BACKGROUND DEPTH */
+/* ============================= */
+
+.bg-depth {
+  position: relative;
+}
+
+.bg-depth::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(212,175,55,0.12), transparent 30%),
+    radial-gradient(circle at 80% 90%, rgba(0,180,255,0.10), transparent 35%);
+  pointer-events: none;
+}
+
+/* ============================= */
+/* 🧠 MICRO INTERACTIONS */
+/* ============================= */
+
+.smooth {
+  transition: all 0.25s ease;
+}
+
+.lift:hover {
+  transform: translateY(-4px);
 }
