@@ -40,20 +40,46 @@ type SidebarItemProps = {
   active?: boolean;
 };
 
-function SidebarItem({ icon, label, active = false }: SidebarItemProps) {
+import { usePathname } from "next/navigation";
+
+function SidebarItem({
+  icon,
+  label,
+  href = "#",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  href?: string;
+}) {
+  const pathname = usePathname();
+const isActiveRoute = href !== "#" && pathname === href;
+const isPrimary = href === "/dashboard/marketing-assets";
   return (
-    <button
-      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
-        active
-          ? "border-[var(--gold-main)]/30 bg-[rgba(212,175,55,0.10)] text-white shadow-[0_10px_30px_rgba(212,175,55,.10)]"
-          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/[0.08] hover:text-white"
-      }`}
-    >
-      <span className={active ? "text-[var(--gold-main)]" : "text-white/60"}>
-        {icon}
-      </span>
-      {label}
-    </button>
+    <Link href={href}>
+      <div
+className={`flex w-full items-center gap-3 rounded-2xl border px-5 py-3.5 text-left text-[15px] font-medium transition-all duration-300 ${
+  isPrimary
+  ? "border-[var(--gold-main)] bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.35)] hover:bg-[var(--gold-soft)] hover:shadow-[0_15px_40px_rgba(212,175,55,.45)] hover:-translate-y-[1px]"
+   : isActiveRoute
+    ? "border-[var(--gold-main)]/30 bg-[rgba(212,175,55,0.10)] text-white shadow-[0_10px_30px_rgba(212,175,55,.10)]"
+    : href !== "#"
+    ? "border-white/10 bg-white/5 text-white/80 hover:border-[var(--gold-main)]/30 hover:bg-[rgba(212,175,55,0.18)] hover:text-white hover:shadow-[0_10px_25px_rgba(212,175,55,.15)]"
+    : "cursor-default border-white/10 bg-white/5 text-white/45"
+}`}
+      >
+<span
+  className={
+    isPrimary
+      ? "text-black"
+      : isActiveRoute
+      ? "text-[var(--gold-main)]"
+      : "text-white/60"
+  }
+>          {icon}
+        </span>
+        {label}
+      </div>
+    </Link>
   );
 }
 
@@ -124,8 +150,8 @@ function AchievementBadge({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08]">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgba(212,175,55,0.12)] text-[var(--gold-main)]">
-        <Award size={22} />
+<div className="w-full px-6 lg:px-10">
+          <Award size={22} />
       </div>
       <p className="mt-4 font-semibold text-white">{title}</p>
       <p className="mt-1 text-xs text-[var(--text-muted)]">{subtitle}</p>
@@ -251,24 +277,54 @@ src={
 
   {/* NAVIGATION */}
   <div className="rounded-[32px] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
-    <div className="space-y-2">
-      <SidebarItem icon={<LayoutDashboard size={18} />} label="Dashboard" active />
-      <SidebarItem icon={<Home size={18} />} label="My Listings" />
-      <SidebarItem icon={<Inbox size={18} />} label="Leads" />
-      <SidebarItem icon={<GraduationCap size={18} />} label="Academy" />
-      <SidebarItem icon={<Award size={18} />} label="Certification Path" />
-      <SidebarItem icon={<BarChart3 size={18} />} label="Performance Metrics" />
-      <SidebarItem icon={<Megaphone size={18} />} label="Marketing Assets" />
-      <SidebarItem icon={<User size={18} />} label="Profile Settings" />
-      <SidebarItem icon={<CreditCard size={18} />} label="Billing & Plan" />
-    </div>
+<div className="flex flex-col gap-3">
+    <SidebarItem
+    icon={<LayoutDashboard size={18} />}
+    label="Dashboard"
+    href="/dashboard"
+  />
 
-    <div className="mt-5 border-t border-white/10 pt-5">
-      <div className="space-y-2">
-        <SidebarItem icon={<HelpCircle size={18} />} label="Help & Support" />
-        <SidebarItem icon={<LogOut size={18} />} label="Logout" />
-      </div>
-    </div>
+  <SidebarItem icon={<Home size={18} />} label="My Listings" />
+  <SidebarItem icon={<Inbox size={18} />} label="Leads" />
+
+  <SidebarItem
+    icon={<GraduationCap size={18} />}
+    label="Academy"
+  />
+
+  <SidebarItem
+    icon={<Award size={18} />}
+    label="Certification Path"
+  />
+
+  <SidebarItem
+    icon={<BarChart3 size={18} />}
+    label="Performance Metrics"
+  />
+
+  <SidebarItem
+    icon={<Megaphone size={18} />}
+    label="Marketing Assets"
+    href="/dashboard/marketing-assets"
+  />
+
+  <SidebarItem
+    icon={<User size={18} />}
+    label="Profile Settings"
+  />
+
+  <SidebarItem
+    icon={<CreditCard size={18} />}
+    label="Billing & Plan"
+  />
+</div>
+
+    <div className="mt-6 pt-6 border-t border-white/10">
+  <div className="flex flex-col gap-3">
+    <SidebarItem icon={<HelpCircle size={18} />} label="Help & Support" />
+    <SidebarItem icon={<LogOut size={18} />} label="Logout" />
+  </div>
+</div>
   </div>
 </aside>
 
