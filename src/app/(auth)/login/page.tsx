@@ -1,21 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
   Mail,
   Lock,
-  ArrowRight,
   Eye,
   EyeOff,
   Loader2,
 } from "lucide-react";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +21,23 @@ export default function LoginPage() {
   const canSubmit = useMemo(() => {
     return email.trim().length > 0 && password.trim().length > 0 && !loading;
   }, [email, password, loading]);
+
+  useEffect(() => {
+    void redirectSignedInUser();
+  }, []);
+
+  async function redirectSignedInUser() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return;
+    }
+
+    setLoading(true);
+    window.location.href = "/admin";
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -42,9 +55,8 @@ export default function LoginPage() {
       return;
     }
 
-    // ✅ SIMPLE + CLEAN FLOW
-    setLoading(false);
-    router.push("/dashboard");
+    await supabase.auth.refreshSession();
+    window.location.href = "/admin";
   }
 
   async function handleForgotPassword() {
@@ -131,7 +143,10 @@ export default function LoginPage() {
               className="w-full rounded-full bg-[var(--gold-main)] py-4 font-semibold text-black hover:bg-[var(--gold-soft)] transition"
             >
               {loading ? (
-                <Loader2 className="animate-spin mx-auto" />
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="animate-spin" />
+                  Signing you in...
+                </span>
               ) : (
                 "Enter Dashboard"
               )}

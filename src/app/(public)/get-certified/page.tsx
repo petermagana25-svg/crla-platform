@@ -1,9 +1,52 @@
+'use client';
+
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 import { CheckCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function GetCertifiedPage() {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setMessage(null);
+
+    const { error } = await supabase.from("agent_applications").insert({
+      full_name: fullName.trim(),
+      email: email.trim(),
+      license_number: licenseNumber.trim(),
+    });
+
+    if (error) {
+      setMessage({
+        type: "error",
+        text: "Something went wrong. Please try again.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    setFullName("");
+    setEmail("");
+    setLicenseNumber("");
+    setMessage({
+      type: "success",
+      text: "Thank you for your application. We will review it within 48 hours.",
+    });
+    setIsSubmitting(false);
+  }
+
   return (
     <main className="bg-[var(--navy-dark)] text-white">
       <Navbar />
@@ -98,15 +141,51 @@ export default function GetCertifiedPage() {
               Check Your Eligibility
             </h2>
 
-            <form className="mt-10 space-y-6">
-              <input placeholder="Full Name" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm" />
-              <input placeholder="Brokerage" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm" />
-              <input placeholder="Years of Experience" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm" />
-              <input placeholder="City / Region" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm" />
-              <input placeholder="Email Address" className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm" />
+            {message && (
+              <div
+                className={`mt-6 rounded-xl px-4 py-3 text-sm ${
+                  message.type === "success"
+                    ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                    : "border border-red-400/30 bg-red-400/10 text-red-200"
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
 
-              <button className="w-full rounded-xl bg-[var(--gold-main)] py-4 font-semibold text-black transition hover:bg-[var(--gold-soft)]">
-                Submit Application
+            <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+              <input
+                placeholder="Full Name"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                required
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <input
+                placeholder="Email Address"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <input
+                placeholder="License Number"
+                value={licenseNumber}
+                onChange={(event) => setLicenseNumber(event.target.value)}
+                required
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              />
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full rounded-xl bg-[var(--gold-main)] py-4 font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Submitting..." : "Submit Application"}
               </button>
             </form>
           </div>
