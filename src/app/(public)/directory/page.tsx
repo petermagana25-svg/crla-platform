@@ -8,7 +8,9 @@ import Container from "@/components/layout/Container";
 import { supabase } from "@/lib/supabase";
 
 type AgentCardData = {
+  agentStatus: string | null;
   bio?: string | null;
+  isPlaceholder: boolean;
   id: string;
   image?: string;
   location: string;
@@ -20,7 +22,9 @@ type AgentCardData = {
 
 type AgentRow = {
   city: string | null;
+  created_at: string | null;
   full_name: string | null;
+  agent_status: string | null;
   id: string;
   state: string | null;
 };
@@ -30,6 +34,53 @@ type ProfileRow = {
   bio: string | null;
   id: string;
 };
+
+const minimumDirectoryAgents = 6;
+
+const placeholderAgents = [
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
+    city: "Los Angeles",
+    full_name: "Michael Carter",
+    state: "CA",
+  },
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+    city: "San Diego",
+    full_name: "Sophia Martinez",
+    state: "CA",
+  },
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d",
+    city: "San Francisco",
+    full_name: "Daniel Kim",
+    state: "CA",
+  },
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1",
+    city: "Sacramento",
+    full_name: "Emily Johnson",
+    state: "CA",
+  },
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+    city: "Irvine",
+    full_name: "James Anderson",
+    state: "CA",
+  },
+  {
+    avatar_url:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+    city: "San Jose",
+    full_name: "Olivia Chen",
+    state: "CA",
+  },
+] as const;
 
 function AgentCard({ agent }: { agent: AgentCardData }) {
   return (
@@ -49,6 +100,14 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
       <h3 className="text-center text-xl font-semibold text-white">
         {agent.name}
       </h3>
+
+      {agent.isPlaceholder ? (
+        <div className="mt-3 flex justify-center">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/65">
+            Coming Soon
+          </span>
+        </div>
+      ) : null}
 
       <div className="mt-2 flex items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
         <MapPin size={16} />
@@ -84,21 +143,22 @@ export default function DirectoryPage() {
   const [selectedState, setSelectedState] = useState("All");
 
   async function fetchAgents() {
-    const { data: agentData, error: agentError } = await supabase
+    const { data: realAgentData, error: realAgentError } = await supabase
       .from("agents")
-      .select("id, full_name, city, state")
+      .select("id, full_name, city, state, created_at, agent_status")
       .eq("agent_status", "active")
       .eq("is_active", true)
-      .eq("role", "agent")
-      .order("full_name", { ascending: true });
+      .order("created_at", { ascending: false });
 
-    if (agentError || !agentData) {
-      setAgents([]);
-      return;
-    }
+    const realAgents = (realAgentData ?? []) as AgentRow[];
+    const sortedRealAgents = [...realAgents].sort((a, b) => {
+      const aCreatedAt = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bCreatedAt = b.created_at ? new Date(b.created_at).getTime() : 0;
 
-    const agentRows = agentData as AgentRow[];
-    const agentIds = agentRows.map((agent) => agent.id);
+      return bCreatedAt - aCreatedAt;
+    });
+
+    const agentIds = sortedRealAgents.map((agent) => agent.id);
 
     const { data: profileData } = agentIds.length
       ? await supabase
@@ -114,13 +174,15 @@ export default function DirectoryPage() {
       return collection;
     }, {});
 
-    const mappedAgents: AgentCardData[] = agentRows.map((agent) => {
+    const mappedRealAgents: AgentCardData[] = sortedRealAgents.map((agent) => {
       const profile = profilesById[agent.id];
       const state = agent.state?.trim() || "State not set";
       const city = agent.city?.trim() || "Location not set";
 
       return {
+        agentStatus: agent.agent_status,
         bio: profile?.bio,
+        isPlaceholder: false,
         id: agent.id,
         image: profile?.avatar_url || "/images/agent-1.jpg",
         location: agent.city ? `${city}, ${state}` : state,
@@ -131,7 +193,32 @@ export default function DirectoryPage() {
       };
     });
 
-    setAgents(mappedAgents);
+    const placeholderCount = Math.max(
+      minimumDirectoryAgents - mappedRealAgents.length,
+      0
+    );
+
+    const mappedPlaceholderAgents: AgentCardData[] = placeholderAgents
+      .slice(0, placeholderCount)
+      .map((agent, index) => ({
+        agentStatus: "coming_soon",
+        bio: "Certified renovation listing specialist joining the CRLA directory soon.",
+        id: `placeholder-${index + 1}`,
+        image: agent.avatar_url,
+        isPlaceholder: true,
+        location: `${agent.city}, ${agent.state}`,
+        name: agent.full_name,
+        rating: null,
+        region: agent.state,
+        specialty: "Coming soon to the CRLA network",
+      }));
+
+    if (realAgentError) {
+      setAgents(mappedPlaceholderAgents);
+      return;
+    }
+
+    setAgents([...mappedRealAgents, ...mappedPlaceholderAgents]);
   }
 
   useEffect(() => {
@@ -216,7 +303,7 @@ export default function DirectoryPage() {
 
           {filteredAgents.length === 0 && (
             <p className="mt-16 text-center text-white/50">
-              No active CRLA agents match your filters.
+              No CRLA agents match your filters.
             </p>
           )}
         </Container>
