@@ -123,10 +123,18 @@ export default function AdminApplicationsPage() {
         );
       }
 
+      const successMessage =
+        typeof result === 'object' &&
+        result !== null &&
+        'message' in result &&
+        typeof result.message === 'string'
+          ? result.message
+          : 'Updated ✓';
+
       await fetchApplications();
       setMessage({
         type: 'success',
-        text: 'Updated ✓',
+        text: successMessage,
       });
     } catch (error) {
       setMessage({

@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useState } from 'react';
+import {
+  sharedActiveNavItemClass,
+  sharedInactiveNavItemClass,
+  sharedNavItemBaseClass,
+} from '@/lib/nav-item-styles';
 import { logout } from '@/lib/logout';
+import { setViewMode } from '@/lib/view-mode';
 
 const navigation = [
   { href: '/admin/applications', label: 'Applications' },
@@ -23,6 +29,11 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
     await logout(router);
   }
 
+  function handleSwitchToAgentView() {
+    setViewMode('agent');
+    router.push('/dashboard');
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="flex min-h-screen">
@@ -38,16 +49,17 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
 
           <nav className="space-y-2">
             {navigation.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
 
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`block rounded-xl px-4 py-3 text-sm font-medium transition ${
+                  className={`block px-4 py-3 text-sm font-medium ${sharedNavItemBaseClass} ${
                     isActive
-                      ? 'bg-white text-slate-950'
-                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                      ? sharedActiveNavItemClass
+                      : sharedInactiveNavItemClass
                   }`}
                 >
                   {item.label}
@@ -62,12 +74,13 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between gap-4">
               <h1 className="text-2xl font-semibold text-white">Admin Panel</h1>
               <div className="flex items-center gap-3">
-                <Link
-                  href="/dashboard"
+                <button
+                  type="button"
+                  onClick={handleSwitchToAgentView}
                   className={headerButtonClass}
                 >
                   Switch to Agent View
-                </Link>
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}

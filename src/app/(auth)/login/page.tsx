@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getPostAuthRedirectPathClient } from "@/lib/get-post-auth-redirect-path-client";
 import {
   ShieldCheck,
   Mail,
@@ -15,16 +16,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    type: "error" | "success";
+    text: string;
+  } | null>(null);
 
   const canSubmit = useMemo(() => {
-    return email.trim().length > 0 && password.trim().length > 0 && !loading;
-  }, [email, password, loading]);
-
-  useEffect(() => {
-    void redirectSignedInUser();
-  }, []);
+    return (
+      email.trim().length > 0 &&
+      password.trim().length > 0 &&
+      !isSigningIn &&
+      !isSendingResetEmail
+    );
+  }, [email, isSendingResetEmail, isSigningIn, password]);
 
   async function redirectSignedInUser() {
     const {
@@ -35,14 +41,20 @@ export default function LoginPage() {
       return;
     }
 
-    setLoading(true);
-    window.location.href = "/admin";
+    setIsSigningIn(true);
+    const redirectTo = await getPostAuthRedirectPathClient();
+    window.location.href = redirectTo;
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void redirectSignedInUser();
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setErrorMessage("");
-    setLoading(true);
+    setFeedback(null);
+    setIsSigningIn(true);
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -50,33 +62,53 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setLoading(false);
-      setErrorMessage(error.message || "Unable to sign in.");
+      setIsSigningIn(false);
+      setFeedback({
+        type: "error",
+        text: error.message || "Unable to sign in.",
+      });
       return;
     }
 
     await supabase.auth.refreshSession();
-    window.location.href = "/admin";
+    const redirectTo = await getPostAuthRedirectPathClient();
+    window.location.href = redirectTo;
   }
 
   async function handleForgotPassword() {
     if (!email.trim()) {
-      setErrorMessage("Enter your email first.");
+      setFeedback({
+        type: "error",
+        text: "Enter your email first.",
+      });
       return;
     }
 
-    setErrorMessage("");
+    setFeedback(null);
+    setIsSendingResetEmail(true);
+
+    const redirectBaseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+      window.location.origin;
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${redirectBaseUrl}/reset-password`,
     });
 
     if (error) {
-      setErrorMessage(error.message || "Could not send reset link.");
+      setIsSendingResetEmail(false);
+      setFeedback({
+        type: "error",
+        text: error.message || "Could not send reset link.",
+      });
       return;
     }
 
-    setErrorMessage("Reset link sent. Check your inbox.");
+    setIsSendingResetEmail(false);
+    setFeedback({
+      type: "success",
+      text: "Check your email for a secure password reset link.",
+    });
   }
 
   return (
@@ -132,8 +164,16 @@ export default function LoginPage() {
             </div>
 
             {/* ERROR */}
-            {errorMessage && (
-              <div className="text-sm text-red-400">{errorMessage}</div>
+            {feedback && (
+              <div
+                className={`rounded-2xl px-4 py-3 text-sm ${
+                  feedback.type === "success"
+                    ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                    : "border border-red-400/30 bg-red-400/10 text-red-200"
+                }`}
+              >
+                {feedback.text}
+              </div>
             )}
 
             {/* BUTTON */}
@@ -142,7 +182,7 @@ export default function LoginPage() {
               disabled={!canSubmit}
               className="w-full rounded-full bg-[var(--gold-main)] py-4 font-semibold text-black hover:bg-[var(--gold-soft)] transition"
             >
-              {loading ? (
+              {isSigningIn ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 className="animate-spin" />
                   Signing you in...
@@ -156,9 +196,10 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleForgotPassword}
+              disabled={isSendingResetEmail || isSigningIn}
               className="text-xs text-[var(--gold-main)] text-center w-full"
             >
-              Forgot password?
+              {isSendingResetEmail ? "Sending reset link..." : "Forgot password?"}
             </button>
           </form>
         </div>

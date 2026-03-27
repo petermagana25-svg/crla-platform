@@ -7,13 +7,12 @@ import {
   ArrowRight,
   Award,
   BarChart3,
-  CalendarDays,
   CheckCircle2,
   Clock3,
   CreditCard,
   Download,
-  ExternalLink,
   Eye,
+  FileText,
   GraduationCap,
   HelpCircle,
   Home,
@@ -22,18 +21,34 @@ import {
   LogOut,
   Megaphone,
   MousePointerClick,
-  PlusCircle,
   ShieldCheck,
   Star,
   User,
   Users,
   Briefcase,
+  PlayCircle,
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 import { getCurrentUserRoleClient } from "@/lib/get-current-user-role-client";
+import {
+  formatMembershipCurrency,
+  formatMembershipDate,
+  formatMembershipStatus,
+  getDaysRemaining,
+  getMembershipStatusBadgeClass,
+  Membership,
+  MembershipStatus,
+  selectPreferredMembership,
+} from "@/lib/membership";
+import {
+  sharedActiveNavItemClass,
+  sharedInactiveNavItemClass,
+  sharedNavItemBaseClass,
+} from "@/lib/nav-item-styles";
 import { logout } from "@/lib/logout";
 import { supabase } from "@/lib/supabase";
+import { setViewMode } from "@/lib/view-mode";
 
 type Profile = {
   avatar_url: string | null;
@@ -42,21 +57,43 @@ type Profile = {
   license_number: string | null;
 };
 
+type AgentAccess = {
+  agent_status: string | null;
+  certification_status: string | null;
+  is_active: boolean | null;
+  profile_completed: boolean | null;
+  role: string | null;
+  state: string | null;
+};
+
 type Resource = {
   id: string;
   title: string | null;
   category: string | null;
+  description: string | null;
+  file_url: string | null;
+  created_at: string | null;
+};
+
+type MarketingAsset = {
+  id: string;
+  title: string | null;
+  category: string | null;
+  description: string | null;
   file_url: string | null;
   created_at: string | null;
 };
 
 type SidebarItemProps = {
+  activePaths?: string[];
   icon: React.ReactNode;
   label: string;
   href?: string;
   onClick?: () => void;
   disabled?: boolean;
 };
+
+type ActivationStepStatus = "completed" | "in_progress" | "pending";
 
 const subtleHeaderButtonClass =
   "inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60";
@@ -163,6 +200,7 @@ const recentListings = [
 ] as const;
 
 function SidebarItem({
+  activePaths,
   icon,
   label,
   href = "#",
@@ -170,28 +208,23 @@ function SidebarItem({
   disabled = false,
 }: SidebarItemProps) {
   const pathname = usePathname();
-  const isActiveRoute = href !== "#" && pathname === href;
-  const isPrimary = href === "/dashboard/marketing-assets";
+  const isActiveRoute =
+    activePaths?.some((path) => pathname.includes(path)) ??
+    (href !== "#" && pathname === href);
 
-  const className = `flex w-full items-center gap-3 rounded-2xl border px-5 py-3.5 text-left text-[15px] font-medium transition-all duration-300 ${
-    isPrimary
-      ? "border-[var(--gold-main)] bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.35)] hover:bg-[var(--gold-soft)] hover:shadow-[0_15px_40px_rgba(212,175,55,.45)] hover:-translate-y-[1px]"
-      : isActiveRoute
-        ? "border-[var(--gold-main)]/30 bg-[rgba(212,175,55,0.10)] text-white shadow-[0_10px_30px_rgba(212,175,55,.10)]"
-        : href !== "#" || onClick
-          ? "border-white/10 bg-white/5 text-white/80 hover:border-[var(--gold-main)]/30 hover:bg-[rgba(212,175,55,0.18)] hover:text-white hover:shadow-[0_10px_25px_rgba(212,175,55,.15)]"
-          : "cursor-default border-white/10 bg-white/5 text-white/45"
+  const className = `flex w-full items-center gap-3 px-5 py-3.5 text-left text-[15px] font-medium ${sharedNavItemBaseClass} ${
+    isActiveRoute
+      ? sharedActiveNavItemClass
+      : href !== "#" || onClick
+        ? sharedInactiveNavItemClass
+        : "cursor-default border-white/10 bg-white/5 text-white/45"
   } ${disabled ? "cursor-not-allowed opacity-60" : ""}`;
 
   const content = (
     <>
       <span
         className={
-          isPrimary
-            ? "text-black"
-            : isActiveRoute
-              ? "text-[var(--gold-main)]"
-              : "text-white/60"
+          isActiveRoute ? "text-black" : "text-white/60"
         }
       >
         {icon}
@@ -319,17 +352,95 @@ function QuickAction({
   );
 }
 
+function formatLabel(value: string | null, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+
+  return value
+    .split("_")
+    .join(" ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function inferAcademyType(resource: Resource) {
+  const source = `${resource.title ?? ""} ${resource.description ?? ""} ${
+    resource.file_url ?? ""
+  }`.toLowerCase();
+
+  if (source.includes("sop")) {
+    return "SOP";
+  }
+
+  if (
+    source.includes(".mp4") ||
+    source.includes("youtube") ||
+    source.includes("vimeo") ||
+    source.includes("video")
+  ) {
+    return "Video";
+  }
+
+  return "Document";
+}
+
+function getActivationStepBadgeClass(status: ActivationStepStatus) {
+  switch (status) {
+    case "completed":
+      return "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+    case "in_progress":
+      return "border border-yellow-400/30 bg-yellow-400/10 text-yellow-200";
+    default:
+      return "border border-red-400/30 bg-red-400/10 text-red-200";
+  }
+}
+
+function ActivationStepCard({
+  href,
+  icon,
+  status,
+  title,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  status: ActivationStepStatus;
+  title: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl transition duration-300 hover:-translate-y-[1px] hover:bg-white/[0.08]"
+    >
+      <div className="inline-flex rounded-xl bg-[rgba(212,175,55,0.10)] p-2.5 text-[var(--gold-main)]">
+        {icon}
+      </div>
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <span
+        className={`ml-auto rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${getActivationStepBadgeClass(
+          status
+        )}`}
+      >
+        {status === "completed"
+          ? "done"
+          : status === "in_progress"
+            ? "in progress"
+            : "pending"}
+      </span>
+    </Link>
+  );
+}
+
 export default function AgentDashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [academyResources, setAcademyResources] = useState<Resource[]>([]);
+  const [marketingAssets, setMarketingAssets] = useState<MarketingAsset[]>([]);
+  const [agentAccess, setAgentAccess] = useState<AgentAccess | null>(null);
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [agentState, setAgentState] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  useEffect(() => {
-    void loadDashboard();
-  }, []);
 
   async function loadDashboard() {
     setIsLoading(true);
@@ -343,35 +454,92 @@ export default function AgentDashboardPage() {
       return;
     }
 
-    const role = await getCurrentUserRoleClient();
-    setIsAdmin(role === "admin");
-
-    const [{ data: profileData }, { data: resourceData, error: resourceError }] =
+    const [
+      { data: agentAccessRaw },
+      { data: profileData },
+      { data: marketingAssetData, error: marketingAssetsError },
+      { data: academyResourceData, error: academyResourcesError },
+      { data: membershipsData, error: membershipsError },
+    ] =
       await Promise.all([
+        supabase
+          .from("agents")
+          .select(
+            "agent_status, certification_status, is_active, profile_completed, role, state"
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
         supabase
           .from("profiles")
           .select("avatar_url, city, full_name, license_number")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
-          .from("resources")
-          .select("id, title, category, file_url, created_at")
+          .from("marketing_assets")
+          .select("id, title, category, description, file_url, created_at")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("resources")
+          .select("id, title, category, description, file_url, created_at")
+          .eq("category", "training")
+          .order("created_at", { ascending: false })
+          .limit(3),
+        supabase
+          .from("memberships")
+          .select(
+            "id, plan_name, status, amount, currency, renewal_period, starts_at, expires_at, created_at"
+          )
+          .eq("agent_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
 
-    if (!profileData) {
-      router.push("/onboarding");
+    const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
+    const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
+    const admin = role === "admin";
+    setAgentAccess(agentAccess);
+    setAgentState(agentAccess?.state ?? null);
+    setIsAdmin(admin);
+
+    if (!admin && !agentAccess?.profile_completed) {
+      router.push("/onboarding/profile");
+      return;
+    }
+
+    if (!profileData && !admin) {
+      router.push("/onboarding/profile");
       return;
     }
 
     setProfile(profileData);
-    setResources(resourceError ? [] : resourceData ?? []);
+    setMarketingAssets(marketingAssetsError ? [] : marketingAssetData ?? []);
+    setAcademyResources(
+      academyResourcesError ? [] : academyResourceData ?? []
+    );
+    setMembership(
+      membershipsError ? null : selectPreferredMembership(membershipsData ?? [])
+    );
     setIsLoading(false);
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadDashboard();
+  }, []);
 
   async function handleLogout() {
     setIsLoggingOut(true);
     await logout(router);
+  }
+
+  function handleOpenProfileSettings() {
+    setViewMode("agent");
+    router.push("/onboarding/profile");
+  }
+
+  function handleSwitchToAdminPanel() {
+    setViewMode("admin");
+    router.push("/admin");
   }
 
   function formatCreatedAt(value: string | null) {
@@ -382,7 +550,29 @@ export default function AgentDashboardPage() {
     return new Date(value).toLocaleDateString();
   }
 
-  const featuredResources = resources.slice(0, 4);
+  const latestMarketingAssets = marketingAssets.slice(0, 3);
+  const membershipDaysRemaining = getDaysRemaining(membership?.expires_at ?? null);
+  const membershipStatus = (membership?.status ?? "pending") as MembershipStatus;
+  const profileStepStatus: ActivationStepStatus = agentAccess?.profile_completed
+    ? "completed"
+    : "pending";
+  const certificationStepStatus: ActivationStepStatus =
+    agentAccess?.certification_status === "completed"
+      ? "completed"
+      : agentAccess?.certification_status === "in_progress"
+        ? "in_progress"
+        : "pending";
+  const membershipStepStatus: ActivationStepStatus =
+    membershipStatus === "active"
+      ? "completed"
+      : membership
+        ? "in_progress"
+        : "pending";
+  const activationCompletedCount = [
+    profileStepStatus === "completed",
+    certificationStepStatus === "completed",
+    membershipStepStatus === "completed",
+  ].filter(Boolean).length;
 
   return (
     <main className="min-h-screen bg-[var(--navy-dark)] text-white">
@@ -412,7 +602,9 @@ export default function AgentDashboardPage() {
                     </h2>
 
                     <p className="mt-1 text-xs text-white/50">
-                      {profile?.city || "City not set"}
+                      {profile?.city
+                        ? `${profile.city}${agentState ? `, ${agentState}` : ""}`
+                        : agentState || "Location not set"}
                     </p>
 
                     <p className="mt-1 text-xs text-white/40">
@@ -420,13 +612,6 @@ export default function AgentDashboardPage() {
                     </p>
                   </div>
                 </div>
-
-                <Link
-                  href="/onboarding"
-                  className="mt-5 inline-flex w-full justify-center rounded-xl border border-[var(--gold-main)]/30 px-4 py-2 text-sm font-semibold text-[var(--gold-main)] transition hover:bg-[rgba(212,175,55,0.08)]"
-                >
-                  Update My Profile
-                </Link>
 
                 <div className="mt-6 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] p-4">
                   <p className="text-sm text-white/55">Certification Status</p>
@@ -451,6 +636,8 @@ export default function AgentDashboardPage() {
                   <SidebarItem
                     icon={<GraduationCap size={18} />}
                     label="Academy"
+                    href="/dashboard/academy"
+                    activePaths={["/dashboard/academy"]}
                   />
                   <SidebarItem
                     icon={<Award size={18} />}
@@ -464,14 +651,19 @@ export default function AgentDashboardPage() {
                     icon={<Megaphone size={18} />}
                     label="Marketing Assets"
                     href="/dashboard/marketing-assets"
+                    activePaths={["/dashboard/marketing-assets"]}
                   />
                   <SidebarItem
                     icon={<User size={18} />}
                     label="Profile Settings"
+                    onClick={handleOpenProfileSettings}
+                    activePaths={["/onboarding/profile"]}
                   />
                   <SidebarItem
                     icon={<CreditCard size={18} />}
-                    label="Billing & Plan"
+                    label="Billing & Membership"
+                    href="/dashboard/billing"
+                    activePaths={["/dashboard/billing"]}
                   />
                 </div>
 
@@ -512,10 +704,14 @@ export default function AgentDashboardPage() {
 
                   <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
                     {isAdmin && (
-                      <Link href="/admin" className={subtleHeaderButtonClass}>
+                      <button
+                        type="button"
+                        onClick={handleSwitchToAdminPanel}
+                        className={subtleHeaderButtonClass}
+                      >
                         <ShieldCheck size={16} />
-                        Go to Admin Panel
-                      </Link>
+                        Switch to Admin Panel
+                      </button>
                     )}
                     <button
                       type="button"
@@ -527,6 +723,57 @@ export default function AgentDashboardPage() {
                       {isLoggingOut ? "Logging out..." : "Logout"}
                     </button>
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),rgba(255,255,255,0.03))] p-4 shadow-[0_18px_45px_rgba(0,0,0,.18)] backdrop-blur-2xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.22em] text-white/45">
+                      Activation Progress
+                    </p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">
+                      Become a Certified CRLA Agent
+                    </h2>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      {agentAccess?.agent_status === "active"
+                        ? "You are now an active CRLA Agent"
+                        : "Complete your activation to be listed in the CRLA directory"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-right">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                      Progress
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-white">
+                      {activationCompletedCount} / 3
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      completed
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  <ActivationStepCard
+                    title="Profile Setup"
+                    href="/onboarding/profile"
+                    icon={<User size={18} />}
+                    status={profileStepStatus}
+                  />
+                  <ActivationStepCard
+                    title="Certification"
+                    href="/dashboard/academy"
+                    icon={<GraduationCap size={18} />}
+                    status={certificationStepStatus}
+                  />
+                  <ActivationStepCard
+                    title="Membership Payment"
+                    href="/dashboard/billing"
+                    icon={<CreditCard size={18} />}
+                    status={membershipStepStatus}
+                  />
                 </div>
               </div>
 
@@ -612,50 +859,70 @@ export default function AgentDashboardPage() {
                 <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">Academy Center</h2>
+                      <h2 className="text-2xl font-semibold">New in Academy</h2>
                       <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Continue your training and unlock more credibility
-                        tools.
+                        Fresh training materials and operating guidance for your
+                        next session.
                       </p>
                     </div>
                     <GraduationCap className="text-[var(--gold-main)]" size={24} />
                   </div>
 
                   <div className="mt-6 space-y-4">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-sm text-white/55">Course in Progress</p>
-                      <p className="mt-1 text-lg font-semibold text-white">
-                        Advanced Renovation ROI for Listings
-                      </p>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        78% completed • Finish to unlock Elite pathway credit.
-                      </p>
-                    </div>
+                    {academyResources.map((resource) => {
+                      const resourceType = inferAcademyType(resource);
 
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                      <p className="text-sm text-white/55">Upcoming Live Training</p>
-                      <div className="mt-2 flex items-center gap-2 text-white">
-                        <CalendarDays
-                          size={16}
-                          className="text-[var(--gold-main)]"
-                        />
-                        <span className="font-medium">
-                          Seller Psychology & Renovation Positioning
-                        </span>
+                      return (
+                        <div
+                          key={resource.id}
+                          className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--gold-main)]/20 bg-[rgba(212,175,55,0.10)] px-3 py-1 text-xs font-semibold text-[var(--gold-main)]">
+                              {resourceType === "Video" ? (
+                                <PlayCircle size={14} />
+                              ) : (
+                                <FileText size={14} />
+                              )}
+                              {resourceType}
+                            </span>
+                            <span className="text-xs text-white/45">
+                              {formatCreatedAt(resource.created_at)}
+                            </span>
+                          </div>
+                          <p className="mt-4 text-lg font-semibold text-white">
+                            {resource.title || "Untitled training resource"}
+                          </p>
+                          <p className="mt-2 text-sm text-[var(--text-muted)]">
+                            {resource.description ||
+                              "New academy guidance is ready for review."}
+                          </p>
+                        </div>
+                      );
+                    })}
+
+                    {!isLoading && academyResources.length === 0 && (
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">
+                        No training materials available yet.
                       </div>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Thursday • 2:00 PM UTC
-                      </p>
-                    </div>
+                    )}
+
+                    {isLoading && (
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">
+                        Loading academy content...
+                      </div>
+                    )}
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <QuickAction
                         icon={<Download size={16} />}
-                        title="Download CRLA Playbook"
+                        title="Latest Training Files"
+                        href="/dashboard/academy"
                       />
                       <QuickAction
                         icon={<GraduationCap size={16} />}
-                        title="Enter Academy"
+                        title="Go to Academy"
+                        href="/dashboard/academy"
                       />
                     </div>
                   </div>
@@ -689,57 +956,73 @@ export default function AgentDashboardPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h2 className="text-2xl font-semibold">
-                        Marketing Assets
+                        Latest Marketing Assets
                       </h2>
                       <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Recent marketing and training resources available to your
-                        account.
+                        The newest branded downloads ready to share, post, and
+                        present.
                       </p>
                     </div>
                     <Link
                       href="/dashboard/marketing-assets"
                       className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
                     >
-                      View All
+                      View all assets
                     </Link>
                   </div>
 
                   <div className="mt-6 space-y-4">
-                    {featuredResources.map((resource) => (
+                    {latestMarketingAssets.map((asset) => (
                       <div
-                        key={resource.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        key={asset.id}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-5"
                       >
-                        <div>
-                          <p className="font-semibold text-white">
-                            {resource.title || "Untitled resource"}
-                          </p>
-                          <p className="mt-1 text-sm text-[var(--text-muted)]">
-                            {(resource.category || "General").replace("_", " ")} •{" "}
-                            {formatCreatedAt(resource.created_at)}
-                          </p>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-4">
+                            {asset.file_url ? (
+                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                                <img
+                                  src={asset.file_url}
+                                  alt={asset.title || "Marketing asset preview"}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            ) : null}
+                            <div>
+                              <p className="font-semibold text-white">
+                                {asset.title || "Untitled asset"}
+                              </p>
+                              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                {formatLabel(asset.category, "Marketing")} •{" "}
+                                {formatCreatedAt(asset.created_at)}
+                              </p>
+                              {asset.description && (
+                                <p className="mt-2 text-sm text-white/60">
+                                  {asset.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {asset.file_url ? (
+                            <a
+                              href={`${asset.file_url}?download=1`}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                            >
+                              Download
+                              <Download size={14} />
+                            </a>
+                          ) : (
+                            <span className="text-sm text-white/45">
+                              File unavailable
+                            </span>
+                          )}
                         </div>
-                        {resource.file_url ? (
-                          <a
-                            href={resource.file_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-                          >
-                            Open
-                            <ExternalLink size={14} />
-                          </a>
-                        ) : (
-                          <span className="text-sm text-white/45">
-                            File unavailable
-                          </span>
-                        )}
                       </div>
                     ))}
 
-                    {!isLoading && featuredResources.length === 0 && (
+                    {!isLoading && latestMarketingAssets.length === 0 && (
                       <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-8 text-center text-sm text-slate-400">
-                        No resources available yet.
+                        No assets available yet.
                       </div>
                     )}
 
@@ -752,21 +1035,67 @@ export default function AgentDashboardPage() {
                 </div>
 
                 <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.94),rgba(11,20,38,0.92))] p-7 backdrop-blur-2xl">
-                  <h2 className="text-2xl font-semibold">Billing & Plan</h2>
-                  <p className="mt-2 text-sm text-[var(--text-muted)]">
-                    Keep your membership, visibility, and support access in good
-                    standing.
-                  </p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl font-semibold">
+                        Billing & Membership
+                      </h2>
+                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                        Track plan status, membership validity, and billing
+                        history from one place.
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${getMembershipStatusBadgeClass(
+                        membership?.status ?? null
+                      )}`}
+                    >
+                      {formatMembershipStatus(membership?.status ?? null)}
+                    </span>
+                  </div>
+
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <p className="text-sm text-white/55">Current Membership</p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {membership?.plan_name || "No membership on file"}
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      {membership
+                        ? `${formatMembershipCurrency(
+                            membership.amount,
+                            membership.currency
+                          )} • Valid until ${formatMembershipDate(
+                            membership.expires_at
+                          )}`
+                        : "Membership details will appear here once your billing record is created."}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                      <p className="text-sm text-white/55">Days Remaining</p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {membershipDaysRemaining === null
+                          ? "—"
+                          : `${membershipDaysRemaining} days`}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                      <p className="text-sm text-white/55">Renewal Period</p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {membership?.renewal_period
+                          ? membership.renewal_period.charAt(0).toUpperCase() +
+                            membership.renewal_period.slice(1)
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
 
                   <div className="mt-6 space-y-4">
                     <QuickAction
-                      icon={<PlusCircle size={16} />}
-                      title="Add New Listing"
-                    />
-                    <QuickAction
-                      icon={<User size={16} />}
-                      title="Update Profile"
-                      href="/onboarding"
+                      icon={<CreditCard size={16} />}
+                      title="Open Billing & Membership"
+                      href="/dashboard/billing"
                     />
                     <QuickAction
                       icon={<Megaphone size={16} />}
@@ -777,18 +1106,6 @@ export default function AgentDashboardPage() {
                       icon={<HelpCircle size={16} />}
                       title="Request Support"
                     />
-                  </div>
-
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <p className="text-sm text-white/55">Current Plan</p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      Professional Visibility Plan
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-                      Your listings, profile visibility, and badge exposure are
-                      active. Continue improving performance to increase reach
-                      inside the platform.
-                    </p>
                   </div>
                 </div>
               </div>

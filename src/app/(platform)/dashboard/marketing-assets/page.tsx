@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Download, Megaphone } from "lucide-react";
 
+import BackToDashboardButton from "@/components/dashboard/BackToDashboardButton";
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 
@@ -21,10 +22,6 @@ export default function MarketingAssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [filter, setFilter] = useState("all");
 
-  useEffect(() => {
-    fetchAssets();
-  }, []);
-
   async function fetchAssets() {
     const { data } = await supabase
       .from("marketing_assets")
@@ -33,6 +30,11 @@ export default function MarketingAssetsPage() {
 
     setAssets(data || []);
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAssets();
+  }, []);
 
   const filtered =
     filter === "all"
@@ -45,6 +47,7 @@ export default function MarketingAssetsPage() {
 
       <Container>
         <div className="py-10 lg:py-14 space-y-10">
+          <BackToDashboardButton />
 
           {/* HEADER */}
           <div className="rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-8 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl">

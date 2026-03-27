@@ -1,31 +1,21 @@
 import { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import AdminChrome from '@/components/admin/AdminChrome';
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  getCurrentUserAccessState,
+  resolvePostAuthRedirect,
+} from '@/lib/get-current-user-access-state';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const accessState = await getCurrentUserAccessState();
 
-  let role: string | null = null;
-
-  if (user) {
-    const { data } = await supabase
-      .from('agents')
-      .select('role')
-      .eq('id', user.id);
-
-    role = data?.[0]?.role ?? null;
+  if (!accessState.isAuthenticated) {
+    redirect('/login');
   }
 
-  console.log('ADMIN CHECK:', { user, role });
-
-  if (!user) redirect('/login');
-
-  // TEMP: allow access even if role missing
-  // if (role !== 'admin') redirect('/dashboard')
+  if (accessState.role !== 'admin') {
+    redirect(resolvePostAuthRedirect(accessState));
+  }
 
   return <AdminChrome>{children}</AdminChrome>;
 }

@@ -1,26 +1,18 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getCurrentUserAccessState } from '@/lib/get-current-user-access-state';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const accessState = await getCurrentUserAccessState();
 
-  if (!user) {
+  if (!accessState.isAuthenticated) {
     console.log('ROLE API:', { userId: null, role: null });
     return Response.json({ role: null });
   }
 
-  const { data } = await supabase
-    .from('agents')
-    .select('role')
-    .eq('id', user.id);
+  const role = accessState.role;
 
-  const role = data?.[0]?.role ?? null;
-
-  console.log('ROLE API:', { userId: user?.id, role });
+  console.log('ROLE API:', { userId: accessState.userId, role });
 
   return Response.json({ role });
 }
