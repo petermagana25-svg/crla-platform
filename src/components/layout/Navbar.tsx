@@ -40,6 +40,15 @@ export default function Navbar() {
             </Link>
 
             <Link
+              href="/off-market"
+              className={`${navLink} ${
+                pathname.startsWith("/off-market") ? activeLink : ""
+              }`}
+            >
+              Opportunities
+            </Link>
+
+            <Link
               href="/how-it-works"
               className={`${navLink} ${
                 pathname === "/how-it-works" ? activeLink : ""

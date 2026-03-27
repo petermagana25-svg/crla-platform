@@ -61,6 +61,18 @@ export default function HomePage() {
                   How It Works
                 </Link>
 
+                <Link
+                  href="/off-market"
+                  className="inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-8 text-sm font-medium text-white transition hover:bg-white/10 hover:text-[var(--gold-main)]"
+                >
+                  Explore Off-Market Opportunities
+                  <ArrowRight size={18} />
+                </Link>
+
+                <p className="text-sm text-white/55">
+                  Discover homes before they hit the market
+                </p>
+
                 {/* 👇 SEGMENT SWITCH */}
                 <span className="pt-4 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
                   For Real Estate Professionals

@@ -21,6 +21,7 @@ import {
   LogOut,
   Megaphone,
   MousePointerClick,
+  PlusCircle,
   ShieldCheck,
   Star,
   User,
@@ -82,6 +83,14 @@ type MarketingAsset = {
   description: string | null;
   file_url: string | null;
   created_at: string | null;
+};
+
+type Listing = {
+  expected_completion_date: string | null;
+  id: string;
+  projected_price: number | null;
+  status: "in_progress" | "ready" | "sold";
+  title: string | null;
 };
 
 type SidebarItemProps = {
@@ -178,24 +187,6 @@ const achievements = [
   {
     title: "Market Advisor",
     subtitle: "Strong homeowner engagement",
-  },
-] as const;
-
-const recentListings = [
-  {
-    title: "Modern Family Home",
-    status: "Active",
-    metric: "142 views this week",
-  },
-  {
-    title: "Luxury Coastal Villa",
-    status: "Pending",
-    metric: "87 clicks this week",
-  },
-  {
-    title: "Downtown Loft Upgrade",
-    status: "Active",
-    metric: "64 saves this week",
   },
 ] as const;
 
@@ -363,6 +354,18 @@ function formatLabel(value: string | null, fallback: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatCompactCurrency(value: number | null) {
+  if (value === null) {
+    return "Price TBD";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 function inferAcademyType(resource: Resource) {
   const source = `${resource.title ?? ""} ${resource.description ?? ""} ${
     resource.file_url ?? ""
@@ -434,6 +437,7 @@ export default function AgentDashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [academyResources, setAcademyResources] = useState<Resource[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
   const [marketingAssets, setMarketingAssets] = useState<MarketingAsset[]>([]);
   const [agentAccess, setAgentAccess] = useState<AgentAccess | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
@@ -460,6 +464,7 @@ export default function AgentDashboardPage() {
       { data: marketingAssetData, error: marketingAssetsError },
       { data: academyResourceData, error: academyResourcesError },
       { data: membershipsData, error: membershipsError },
+      { data: listingData, error: listingsError },
     ] =
       await Promise.all([
         supabase
@@ -492,6 +497,14 @@ export default function AgentDashboardPage() {
           .eq("agent_id", user.id)
           .order("created_at", { ascending: false })
           .limit(10),
+        supabase
+          .from("listings")
+          .select(
+            "expected_completion_date, id, projected_price, status, title"
+          )
+          .eq("agent_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(3),
       ]);
 
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
@@ -519,6 +532,7 @@ export default function AgentDashboardPage() {
     setMembership(
       membershipsError ? null : selectPreferredMembership(membershipsData ?? [])
     );
+    setListings(listingsError ? [] : ((listingData ?? []) as Listing[]));
     setIsLoading(false);
   }
 
@@ -573,6 +587,7 @@ export default function AgentDashboardPage() {
     certificationStepStatus === "completed",
     membershipStepStatus === "completed",
   ].filter(Boolean).length;
+  const isActiveAgent = agentAccess?.agent_status === "active";
 
   return (
     <main className="min-h-screen bg-[var(--navy-dark)] text-white">
@@ -631,7 +646,12 @@ export default function AgentDashboardPage() {
                     label="Dashboard"
                     href="/dashboard"
                   />
-                  <SidebarItem icon={<Home size={18} />} label="My Listings" />
+                  <SidebarItem
+                    icon={<Home size={18} />}
+                    label="My Listings"
+                    href="/dashboard/listings"
+                    activePaths={["/dashboard/listings"]}
+                  />
                   <SidebarItem icon={<Inbox size={18} />} label="Leads" />
                   <SidebarItem
                     icon={<GraduationCap size={18} />}
@@ -703,6 +723,19 @@ export default function AgentDashboardPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
+                    {isActiveAgent ? (
+                      <Link
+                        href="/dashboard/listings/new"
+                        className="inline-flex items-center gap-2 rounded-full bg-[var(--gold-main)] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)]"
+                      >
+                        <PlusCircle size={16} />
+                        Add Listing
+                      </Link>
+                    ) : (
+                      <p className="max-w-xs text-right text-sm text-yellow-200">
+                        Complete your activation to start adding listings
+                      </p>
+                    )}
                     {isAdmin && (
                       <button
                         type="button"
@@ -1093,6 +1126,11 @@ export default function AgentDashboardPage() {
 
                   <div className="mt-6 space-y-4">
                     <QuickAction
+                      icon={<Home size={16} />}
+                      title="Open My Listings"
+                      href="/dashboard/listings"
+                    />
+                    <QuickAction
                       icon={<CreditCard size={16} />}
                       title="Open Billing & Membership"
                       href="/dashboard/billing"
@@ -1115,12 +1153,11 @@ export default function AgentDashboardPage() {
                   <div>
                     <h2 className="text-2xl font-semibold">Recent Listings</h2>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
-                      Properties currently visible in your certified agent
-                      portfolio.
+                      Your latest renovation listings and projected readiness.
                     </p>
                   </div>
                   <Link
-                    href="#"
+                    href="/dashboard/listings"
                     className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
                   >
                     View All
@@ -1128,31 +1165,40 @@ export default function AgentDashboardPage() {
                 </div>
 
                 <div className="mt-6 space-y-4">
-                  {recentListings.map((item) => (
+                  {listings.map((item) => (
                     <div
-                      key={item.title}
+                      key={item.id}
                       className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
-                        <p className="font-semibold text-white">{item.title}</p>
+                        <p className="font-semibold text-white">
+                          {item.title || "Untitled listing"}
+                        </p>
                         <p className="mt-1 text-sm text-[var(--text-muted)]">
-                          {item.metric}
+                          {formatCompactCurrency(item.projected_price)} • Expected{" "}
+                          {formatCreatedAt(item.expected_completion_date)}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            item.status === "Active"
+                            item.status === "ready"
                               ? "bg-[rgba(212,175,55,0.12)] text-[var(--gold-main)]"
                               : "bg-white/10 text-white/70"
                           }`}
                         >
-                          {item.status}
+                          {item.status.replace("_", " ")}
                         </span>
                         <Clock3 size={16} className="text-white/35" />
                       </div>
                     </div>
                   ))}
+
+                  {!isLoading && listings.length === 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-8 text-center text-sm text-slate-400">
+                      You don’t have any listings yet
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
