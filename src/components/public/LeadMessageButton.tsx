@@ -23,10 +23,10 @@ export default function LeadMessageButton({
   listingTitle = null,
 }: LeadMessageButtonProps) {
   const [error, setError] = useState<string | null>(null);
-  const [hasSent, setHasSent] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
   const [senderEmail, setSenderEmail] = useState("");
   const [senderName, setSenderName] = useState("");
   const normalizedAgentName = agentName.trim() || "there";
@@ -47,18 +47,31 @@ export default function LeadMessageButton({
     }
 
     setError(null);
-    setHasSent(false);
+    setSuccess(false);
     setMessage(initialMessage);
     setSenderEmail("");
     setSenderName("");
   }, [initialMessage, isOpen]);
+
+  useEffect(() => {
+    if (!success || !isOpen) {
+      return;
+    }
+
+    const closeTimer = window.setTimeout(() => {
+      setSuccess(false);
+      setIsOpen(false);
+    }, 2000);
+
+    return () => window.clearTimeout(closeTimer);
+  }, [isOpen, success]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!agentId) {
       console.error("Missing agent_id — cannot send message");
-      alert("Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again.");
       return;
     }
 
@@ -67,12 +80,13 @@ export default function LeadMessageButton({
     }
 
     if (!senderName.trim() || !senderEmail.trim()) {
-      alert("Please enter your name and email so the agent can reply");
+      setError("Please enter your name and email so the agent can reply.");
       return;
     }
 
-    setIsSubmitting(true);
+    setLoading(true);
     setError(null);
+    setSuccess(false);
 
     try {
       console.log("Agent ID:", agentId);
@@ -97,25 +111,24 @@ export default function LeadMessageButton({
 
       console.log("Response", response);
 
-      const result = (await response.json().catch(() => null)) as
+      const data = (await response.json().catch(() => null)) as
         | {
             error?: { message?: string };
             success?: boolean;
           }
         | null;
 
-      console.log("Response body", result);
+      console.log("Response body", data);
 
-      if (!response.ok || !result?.success) {
-        throw new Error(result?.error?.message || "Unable to send message.");
+      if (!response.ok || !data?.success) {
+        console.error("Message failed:", data);
+        throw new Error(data?.error?.message || "Unable to send message.");
       }
 
-      setHasSent(true);
-      setMessage(initialMessage);
+      setSuccess(true);
+      setMessage("");
       setSenderEmail("");
       setSenderName("");
-      setIsOpen(false);
-      alert("Message sent successfully");
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -123,7 +136,7 @@ export default function LeadMessageButton({
           : "Unable to send message."
       );
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   }
 
@@ -137,12 +150,6 @@ export default function LeadMessageButton({
       >
         {buttonLabel}
       </button>
-
-      {hasSent ? (
-        <p className="mt-3 text-center text-sm text-emerald-200">
-          Your message has been sent.
-        </p>
-      ) : null}
 
       {error ? (
         <p className="mt-3 text-center text-sm text-red-200">{error}</p>
@@ -175,6 +182,12 @@ export default function LeadMessageButton({
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+              {success ? (
+                <div className="mb-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                  Message sent successfully. The agent will contact you shortly.
+                </div>
+              ) : null}
+
               <label className="block">
                 <span className="mb-2 flex items-center gap-2 text-sm font-medium text-white/80">
                   <MessageSquareText size={16} className="text-[var(--gold-main)]" />
@@ -227,10 +240,10 @@ export default function LeadMessageButton({
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || !message.trim()}
+                  disabled={loading || !message.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSubmitting ? (
+                  {loading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
                       Sending...
