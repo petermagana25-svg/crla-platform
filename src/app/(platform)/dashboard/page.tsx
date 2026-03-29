@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   Award,
-  BarChart3,
   CheckCircle2,
   Clock3,
   CreditCard,
@@ -43,25 +43,22 @@ import {
   selectPreferredMembership,
 } from "@/lib/membership";
 import {
-  sharedActiveNavItemClass,
-  sharedInactiveNavItemClass,
-  sharedNavItemBaseClass,
-} from "@/lib/nav-item-styles";
-import { logout } from "@/lib/logout";
+  logout,
+} from "@/lib/logout";
 import { supabase } from "@/lib/supabase";
 import { setViewMode } from "@/lib/view-mode";
 
 type Profile = {
   avatar_url: string | null;
-  city: string | null;
-  full_name: string | null;
-  license_number: string | null;
 };
 
 type AgentAccess = {
   agent_status: string | null;
+  city: string | null;
   certification_status: string | null;
+  full_name: string | null;
   is_active: boolean | null;
+  license_number: string | null;
   profile_completed: boolean | null;
   role: string | null;
   state: string | null;
@@ -95,11 +92,15 @@ type Listing = {
 
 type SidebarItemProps = {
   activePaths?: string[];
+  badge?: React.ReactNode;
+  disabledLabel?: string;
+  exactMatch?: boolean;
   icon: React.ReactNode;
   label: string;
   href?: string;
   onClick?: () => void;
   disabled?: boolean;
+  tone?: "primary" | "secondary" | "account" | "footer";
 };
 
 type ActivationStepStatus = "completed" | "in_progress" | "pending";
@@ -192,37 +193,90 @@ const achievements = [
 
 function SidebarItem({
   activePaths,
+  badge,
+  disabledLabel,
+  exactMatch = false,
   icon,
   label,
   href = "#",
   onClick,
   disabled = false,
+  tone = "secondary",
 }: SidebarItemProps) {
   const pathname = usePathname();
-  const isActiveRoute =
-    activePaths?.some((path) => pathname.includes(path)) ??
-    (href !== "#" && pathname === href);
+  const routes =
+    activePaths && activePaths.length > 0
+      ? activePaths
+      : href !== "#"
+        ? [href]
+        : [];
+  const isActiveRoute = routes.some((route) =>
+    exactMatch ? pathname === route : pathname === route || pathname.startsWith(`${route}/`)
+  );
 
-  const className = `flex w-full items-center gap-3 px-5 py-3.5 text-left text-[15px] font-medium ${sharedNavItemBaseClass} ${
+  const toneClass =
+    tone === "primary"
+      ? "font-semibold text-white/95"
+      : tone === "secondary"
+        ? "font-medium text-white/80"
+        : tone === "account"
+          ? "font-medium text-white/75"
+          : "font-medium text-white/65";
+
+  const iconClass = isActiveRoute
+    ? "text-black"
+    : tone === "primary"
+      ? "text-white/75 group-hover:text-[var(--gold-main)]"
+      : tone === "secondary"
+        ? "text-white/60 group-hover:text-[var(--gold-main)]"
+        : tone === "account"
+          ? "text-white/55 group-hover:text-[var(--gold-main)]"
+          : "text-white/45 group-hover:text-[var(--gold-main)]";
+
+  const className = `group flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-[15px] transition-all duration-300 ${
     isActiveRoute
-      ? sharedActiveNavItemClass
-      : href !== "#" || onClick
-        ? sharedInactiveNavItemClass
-        : "cursor-default border-white/10 bg-white/5 text-white/45"
-  } ${disabled ? "cursor-not-allowed opacity-60" : ""}`;
+      ? "border-yellow-300/70 bg-[var(--gold-main)] text-black shadow-[0_0_0_1px_rgba(212,175,55,0.24),0_0_24px_rgba(212,175,55,0.34)]"
+      : disabled
+        ? "cursor-not-allowed border-transparent bg-transparent text-white/50 opacity-50"
+        : `border-transparent bg-transparent ${toneClass} hover:border-yellow-400/20 hover:bg-white/[0.045] hover:text-[var(--gold-main)] hover:shadow-[0_0_18px_rgba(212,175,55,0.12)]`
+  }`;
+
+  const badgeClass = isActiveRoute
+    ? "bg-black/10 text-black/75"
+    : disabled
+      ? "border border-white/10 bg-white/5 text-white/40"
+      : "border border-[var(--gold-main)]/20 bg-[rgba(212,175,55,0.12)] text-[var(--gold-main)]";
 
   const content = (
     <>
-      <span
-        className={
-          isActiveRoute ? "text-black" : "text-white/60"
-        }
-      >
-        {icon}
+      <span className="flex min-w-0 items-center gap-3">
+        <span className={`transition-colors duration-300 ${iconClass}`}>
+          {icon}
+        </span>
+        <span className="truncate">{label}</span>
       </span>
-      {label}
+      {badge || disabledLabel ? (
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${badgeClass}`}
+        >
+          {badge || disabledLabel}
+        </span>
+      ) : null}
     </>
   );
+
+  if (!disabled && href !== "#") {
+    return (
+      <Link
+        href={href}
+        onClick={onClick}
+        aria-current={isActiveRoute ? "page" : undefined}
+        className={className}
+      >
+        {content}
+      </Link>
+    );
+  }
 
   if (onClick) {
     return (
@@ -238,9 +292,9 @@ function SidebarItem({
   }
 
   return (
-    <Link href={href}>
-      <div className={className}>{content}</div>
-    </Link>
+    <div aria-disabled={disabled} className={className}>
+      {content}
+    </div>
   );
 }
 
@@ -366,6 +420,54 @@ function formatCompactCurrency(value: number | null) {
   }).format(value);
 }
 
+function getProfileInitials(fullName: string | null | undefined) {
+  if (!fullName) {
+    return "";
+  }
+
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+function formatAgentLocation(city: string | null, state: string | null) {
+  const trimmedCity = city?.trim() ?? "";
+  const trimmedState = state?.trim() ?? "";
+
+  if (trimmedCity && trimmedState) {
+    return trimmedCity.toLowerCase() === trimmedState.toLowerCase()
+      ? trimmedCity
+      : `${trimmedCity}, ${trimmedState}`;
+  }
+
+  if (trimmedCity) {
+    return trimmedCity;
+  }
+
+  if (trimmedState) {
+    return trimmedState;
+  }
+
+  return "Location not set";
+}
+
+function getCertificationStatusLabel(status: string | null) {
+  switch (status) {
+    case "active":
+      return "Verified & Active";
+    case "in_progress":
+      return "In Progress";
+    case "pending":
+      return "Pending Activation";
+    default:
+      return "Pending Activation";
+  }
+}
+
 function inferAcademyType(resource: Resource) {
   const source = `${resource.title ?? ""} ${resource.description ?? ""} ${
     resource.file_url ?? ""
@@ -441,10 +543,10 @@ export default function AgentDashboardPage() {
   const [marketingAssets, setMarketingAssets] = useState<MarketingAsset[]>([]);
   const [agentAccess, setAgentAccess] = useState<AgentAccess | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
-  const [agentState, setAgentState] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   async function loadDashboard() {
     setIsLoading(true);
@@ -465,18 +567,19 @@ export default function AgentDashboardPage() {
       { data: academyResourceData, error: academyResourcesError },
       { data: membershipsData, error: membershipsError },
       { data: listingData, error: listingsError },
+      { count: unreadMessagesCount, error: unreadMessagesError },
     ] =
       await Promise.all([
         supabase
           .from("agents")
           .select(
-            "agent_status, certification_status, is_active, profile_completed, role, state"
+            "agent_status, city, certification_status, full_name, is_active, license_number, profile_completed, role, state"
           )
           .eq("id", user.id)
           .maybeSingle(),
         supabase
           .from("profiles")
-          .select("avatar_url, city, full_name, license_number")
+          .select("avatar_url")
           .eq("id", user.id)
           .maybeSingle(),
         supabase
@@ -505,13 +608,17 @@ export default function AgentDashboardPage() {
           .eq("agent_id", user.id)
           .order("created_at", { ascending: false })
           .limit(3),
+        supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .eq("status", "new"),
       ]);
 
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
     const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
     const admin = role === "admin";
     setAgentAccess(agentAccess);
-    setAgentState(agentAccess?.state ?? null);
     setIsAdmin(admin);
 
     if (!admin && !agentAccess?.profile_completed) {
@@ -533,6 +640,9 @@ export default function AgentDashboardPage() {
       membershipsError ? null : selectPreferredMembership(membershipsData ?? [])
     );
     setListings(listingsError ? [] : ((listingData ?? []) as Listing[]));
+    setUnreadMessageCount(
+      unreadMessagesError ? 0 : unreadMessagesCount ?? 0
+    );
     setIsLoading(false);
   }
 
@@ -549,6 +659,11 @@ export default function AgentDashboardPage() {
   function handleOpenProfileSettings() {
     setViewMode("agent");
     router.push("/onboarding/profile");
+  }
+
+  function handleDashboardReset() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    void loadDashboard();
   }
 
   function handleSwitchToAdminPanel() {
@@ -588,6 +703,17 @@ export default function AgentDashboardPage() {
     membershipStepStatus === "completed",
   ].filter(Boolean).length;
   const isActiveAgent = agentAccess?.agent_status === "active";
+  const profileName = agentAccess?.full_name?.trim() ?? "";
+  const profileInitials = getProfileInitials(profileName);
+  const heroHeading = profileName ? `Welcome back, ${profileName}` : "Welcome";
+  const certificationStatusLabel = getCertificationStatusLabel(
+    agentAccess?.agent_status ?? null
+  );
+  const renewalDate = membership?.status === "active" ? membership.expires_at : null;
+  const locationLabel = formatAgentLocation(
+    agentAccess?.city ?? null,
+    agentAccess?.state ?? null
+  );
 
   return (
     <main className="min-h-screen bg-[var(--navy-dark)] text-white">
@@ -600,11 +726,27 @@ export default function AgentDashboardPage() {
               <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_25px_70px_rgba(0,0,0,.28)]">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                    <img
-                      src={profile?.avatar_url || "https://i.pravatar.cc/300"}
-                      alt="Agent profile"
-                      className="h-full w-full object-cover"
-                    />
+                    {isLoading ? (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-white/10" />
+                    ) : profile?.avatar_url ? (
+                      <div className="relative h-full w-full">
+                        <Image
+                          src={profile.avatar_url}
+                          alt={profileName ? `${profileName} profile photo` : "Profile photo"}
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                        />
+                      </div>
+                    ) : profileInitials ? (
+                      <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,rgba(212,175,55,0.18),rgba(255,255,255,0.06))] text-lg font-semibold tracking-[0.14em] text-[var(--gold-main)]">
+                        {profileInitials}
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-white/5 text-white/35">
+                        <User size={24} />
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -612,95 +754,140 @@ export default function AgentDashboardPage() {
                       Certified Agent
                     </p>
 
-                    <h2 className="mt-1 truncate text-xl font-semibold">
-                      {profile?.full_name || "Your Name"}
-                    </h2>
+                    {isLoading ? (
+                      <div className="mt-2 space-y-2">
+                        <div className="h-5 w-28 animate-pulse rounded-full bg-white/10" />
+                        <div className="h-3 w-24 animate-pulse rounded-full bg-white/10" />
+                        <div className="h-3 w-20 animate-pulse rounded-full bg-white/10" />
+                      </div>
+                    ) : (
+                      <>
+                        {profileName ? (
+                          <h2 className="mt-1 truncate text-xl font-semibold">
+                            {profileName}
+                          </h2>
+                        ) : null}
 
-                    <p className="mt-1 text-xs text-white/50">
-                      {profile?.city
-                        ? `${profile.city}${agentState ? `, ${agentState}` : ""}`
-                        : agentState || "Location not set"}
-                    </p>
+                        <p className="mt-1 text-xs text-white/50">
+                          {locationLabel}
+                        </p>
 
-                    <p className="mt-1 text-xs text-white/40">
-                      License #{profile?.license_number || "—"}
-                    </p>
+                        <p className="mt-1 text-xs text-white/40">
+                          License #{agentAccess?.license_number || "—"}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <div className="mt-6 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] p-4">
-                  <p className="text-sm text-white/55">Certification Status</p>
-                  <p className="mt-2 text-lg font-semibold text-white">
-                    Verified & Active
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--text-muted)]">
-                    Renewal due on Dec 18, 2026
-                  </p>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-4 w-28 animate-pulse rounded-full bg-white/10" />
+                      <div className="h-6 w-40 animate-pulse rounded-full bg-white/10" />
+                      <div className="h-4 w-36 animate-pulse rounded-full bg-white/10" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-white/55">Certification Status</p>
+                      <p className="mt-2 text-lg font-semibold text-white">
+                        {certificationStatusLabel}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">
+                        {renewalDate
+                          ? `Renewal due on ${formatMembershipDate(renewalDate)}`
+                          : "Renewal date pending"}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="rounded-[32px] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
-                <div className="flex flex-col gap-3">
-                  <SidebarItem
-                    icon={<LayoutDashboard size={18} />}
-                    label="Dashboard"
-                    href="/dashboard"
-                  />
-                  <SidebarItem
-                    icon={<Home size={18} />}
-                    label="My Listings"
-                    href="/dashboard/listings"
-                    activePaths={["/dashboard/listings"]}
-                  />
-                  <SidebarItem icon={<Inbox size={18} />} label="Leads" />
-                  <SidebarItem
-                    icon={<GraduationCap size={18} />}
-                    label="Academy"
-                    href="/dashboard/academy"
-                    activePaths={["/dashboard/academy"]}
-                  />
-                  <SidebarItem
-                    icon={<Award size={18} />}
-                    label="Certification Path"
-                  />
-                  <SidebarItem
-                    icon={<BarChart3 size={18} />}
-                    label="Performance Metrics"
-                  />
-                  <SidebarItem
-                    icon={<Megaphone size={18} />}
-                    label="Marketing Assets"
-                    href="/dashboard/marketing-assets"
-                    activePaths={["/dashboard/marketing-assets"]}
-                  />
-                  <SidebarItem
-                    icon={<User size={18} />}
-                    label="Profile Settings"
-                    onClick={handleOpenProfileSettings}
-                    activePaths={["/onboarding/profile"]}
-                  />
-                  <SidebarItem
-                    icon={<CreditCard size={18} />}
-                    label="Billing & Membership"
-                    href="/dashboard/billing"
-                    activePaths={["/dashboard/billing"]}
-                  />
-                </div>
+                <nav aria-label="Dashboard navigation">
+                  <div className="flex flex-col gap-2">
+                    <SidebarItem
+                      icon={<LayoutDashboard size={18} />}
+                      label="Dashboard"
+                      onClick={handleDashboardReset}
+                      activePaths={["/dashboard"]}
+                      exactMatch
+                      tone="primary"
+                    />
+                    <SidebarItem
+                      icon={<Home size={18} />}
+                      label="My Listings"
+                      href="/dashboard/listings"
+                      activePaths={["/dashboard/listings"]}
+                      tone="primary"
+                    />
+                    <SidebarItem
+                      icon={<Inbox size={18} />}
+                      label="Inbox"
+                      href="/dashboard/inbox"
+                      activePaths={["/dashboard/inbox"]}
+                      exactMatch
+                      badge={String(unreadMessageCount)}
+                      tone="primary"
+                    />
+                  </div>
 
-                <div className="mt-6 border-t border-white/10 pt-6">
-                  <div className="flex flex-col gap-3">
+                  <div className="mt-6 flex flex-col gap-2">
+                    <SidebarItem
+                      icon={<GraduationCap size={18} />}
+                      label="Academy"
+                      href="/dashboard/academy"
+                      activePaths={["/dashboard/academy"]}
+                      exactMatch
+                      tone="secondary"
+                    />
+                    <SidebarItem
+                      icon={<Megaphone size={18} />}
+                      label="Marketing Assets"
+                      href="/dashboard/marketing-assets"
+                      activePaths={["/dashboard/marketing-assets"]}
+                      exactMatch
+                      tone="secondary"
+                    />
+                  </div>
+
+                  <div className="mt-6 flex flex-col gap-2">
+                    <SidebarItem
+                      icon={<User size={18} />}
+                      label="Profile Settings"
+                      onClick={handleOpenProfileSettings}
+                      activePaths={["/onboarding/profile"]}
+                      exactMatch
+                      tone="account"
+                    />
+                    <SidebarItem
+                      icon={<CreditCard size={18} />}
+                      label="Billing & Membership"
+                      href="/dashboard/billing"
+                      activePaths={["/dashboard/billing"]}
+                      exactMatch
+                      tone="account"
+                    />
+                  </div>
+
+                  <div className="mt-6 flex flex-col gap-2">
                     <SidebarItem
                       icon={<HelpCircle size={18} />}
                       label="Help & Support"
+                      href="/dashboard/help"
+                      activePaths={["/dashboard/help"]}
+                      exactMatch
+                      tone="footer"
                     />
                     <SidebarItem
                       icon={<LogOut size={18} />}
                       label={isLoggingOut ? "Logging out..." : "Logout"}
                       onClick={handleLogout}
                       disabled={isLoggingOut}
+                      tone="footer"
                     />
                   </div>
-                </div>
+                </nav>
               </div>
             </aside>
 
@@ -711,9 +898,15 @@ export default function AgentDashboardPage() {
                     <p className="text-sm uppercase tracking-[0.22em] text-white/40">
                       Agent Growth Hub
                     </p>
-                    <h1 className="mt-3 text-4xl font-bold md:text-5xl">
-                      Welcome back, {profile?.full_name || "Agent"}
-                    </h1>
+                    {isLoading ? (
+                      <div className="mt-3 space-y-3">
+                        <div className="h-10 w-56 animate-pulse rounded-full bg-white/10 md:h-12 md:w-72" />
+                      </div>
+                    ) : (
+                      <h1 className="mt-3 text-4xl font-bold md:text-5xl">
+                        {heroHeading}
+                      </h1>
+                    )}
 
                     <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--text-muted)]">
                       Track your exposure, grow your professional profile, access

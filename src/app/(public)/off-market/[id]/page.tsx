@@ -3,11 +3,13 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, Home, MapPin } from "lucide-react";
 import Container from "@/components/layout/Container";
 import Navbar from "@/components/layout/Navbar";
-import RequestInformationButton from "@/components/public/RequestInformationButton";
+import LeadMessageButton from "@/components/public/LeadMessageButton";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 type ListingDetail = {
   address: string;
+  agent_id: string | null;
+  agent_name: string | null;
   description: string;
   expected_completion_date: string | null;
   id: string;
@@ -18,6 +20,7 @@ type ListingDetail = {
   agents: {
     email: string | null;
     full_name: string | null;
+    id: string;
   } | null;
 };
 
@@ -61,7 +64,7 @@ async function fetchOffMarketListing(id: string) {
   const joinedQuery = await supabase
     .from("listings")
     .select(
-      "address, description, expected_completion_date, id, image_url, projected_price, renovation_details, title, agents!inner(id, email, full_name, is_active)"
+      "address, agent_id, description, expected_completion_date, id, image_url, projected_price, renovation_details, title, agents!inner(id, email, full_name, is_active)"
     )
     .eq("id", id)
     .in("status", ["in_progress", "ready"])
@@ -73,10 +76,12 @@ async function fetchOffMarketListing(id: string) {
 
     return {
       ...listing,
+      agent_name: listing.agents?.[0]?.full_name ?? null,
       agents: listing.agents?.[0]
         ? {
             email: listing.agents[0].email,
             full_name: listing.agents[0].full_name,
+            id: listing.agents[0].id,
           }
         : null,
     };
@@ -85,7 +90,7 @@ async function fetchOffMarketListing(id: string) {
   const fallbackQuery = await supabase
     .from("listings")
     .select(
-      "address, description, expected_completion_date, id, image_url, projected_price, renovation_details, title"
+      "address, agent_id, description, expected_completion_date, id, image_url, projected_price, renovation_details, title"
     )
     .eq("id", id)
     .in("status", ["in_progress", "ready"])
@@ -104,7 +109,7 @@ export default async function OffMarketListingDetailPage({
   const { id } = await params;
   const listing = await fetchOffMarketListing(id);
 
-  const agentName = listing?.agents?.full_name || "CRLA Listing Agent";
+  const agentName = listing?.agent_name || listing?.agents?.full_name || "";
   const agentEmail = listing?.agents?.email || null;
 
   return (
@@ -180,13 +185,22 @@ export default async function OffMarketListingDetailPage({
                       Listing Agent
                     </p>
                     <p className="mt-3 text-xl font-semibold text-white">
-                      {agentName}
+                      {agentName || "Assigned CRLA agent"}
                     </p>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
                       {agentEmail || "Contact details available upon request"}
                     </p>
 
-                    <RequestInformationButton />
+                    {listing.agent_id ? (
+                      <LeadMessageButton
+                        agentId={listing.agent_id}
+                        agentName={agentName}
+                        buttonLabel="Request Information"
+                        listingId={listing.id}
+                        listingTitle={listing.title || listing.address}
+                        className="relative z-10 mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[var(--gold-main)] px-5 py-3 font-semibold text-black transition hover:bg-[var(--gold-soft)]"
+                      />
+                    ) : null}
                   </div>
                 </div>
               </section>

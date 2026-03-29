@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { MapPin, Search, Star } from "lucide-react";
+import LeadMessageButton from "@/components/public/LeadMessageButton";
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 import { supabase } from "@/lib/supabase";
@@ -84,7 +84,7 @@ const placeholderAgents = [
 
 function AgentCard({ agent }: { agent: AgentCardData }) {
   return (
-    <div className="group rounded-3xl border border-white/10 bg-white/5 p-7 backdrop-blur transition hover:-translate-y-1 hover:bg-white/[0.06] hover:shadow-[0_25px_70px_rgba(0,0,0,.35)]">
+    <div className="group flex h-full flex-col rounded-3xl border border-white/10 bg-white/5 p-7 backdrop-blur transition hover:-translate-y-1 hover:bg-white/[0.06] hover:shadow-[0_25px_70px_rgba(0,0,0,.35)]">
       <div className="mb-6 flex justify-center">
         <div className="w-[240px] overflow-hidden rounded-2xl border border-white/10">
           <div className="aspect-[4/3] w-full">
@@ -101,13 +101,17 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
         {agent.name}
       </h3>
 
-      {agent.isPlaceholder ? (
-        <div className="mt-3 flex justify-center">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/65">
-            Coming Soon
-          </span>
-        </div>
-      ) : null}
+      <div className="mt-3 flex justify-center">
+        <span
+          className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.16em] ${
+            agent.isPlaceholder
+              ? "border border-white/10 bg-white/5 text-white/65"
+              : "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+          }`}
+        >
+          {agent.isPlaceholder ? "Coming Soon" : "Active"}
+        </span>
+      </div>
 
       <div className="mt-2 flex items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
         <MapPin size={16} />
@@ -127,12 +131,15 @@ function AgentCard({ agent }: { agent: AgentCardData }) {
         {agent.specialty || agent.bio || "Certified renovation listing specialist"}
       </p>
 
-      <Link
-        href="/directory"
-        className="mt-6 inline-flex w-full justify-center rounded-xl bg-[var(--gold-main)] px-5 py-3 font-semibold text-black transition hover:bg-[var(--gold-soft)] hover:shadow-[0_10px_30px_rgba(212,175,55,.25)]"
-      >
-        Contact Agent
-      </Link>
+      <div className="mt-6">
+        <LeadMessageButton
+          agentId={agent.isPlaceholder ? null : agent.id}
+          agentName={agent.name}
+          buttonLabel="Contact Agent"
+          disabled={agent.isPlaceholder}
+          className="inline-flex w-full justify-center rounded-xl bg-[var(--gold-main)] px-5 py-3 font-semibold text-black transition hover:bg-[var(--gold-soft)] hover:shadow-[0_10px_30px_rgba(212,175,55,.25)]"
+        />
+      </div>
     </div>
   );
 }

@@ -71,7 +71,11 @@ export function formatMembershipDate(value: string | null) {
     return "—";
   }
 
-  return new Date(value).toLocaleDateString();
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 export function formatMembershipCurrency(
