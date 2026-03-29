@@ -8,30 +8,19 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 async function fetchOffMarketListings() {
   const supabase = await createServerSupabaseClient();
 
-  const joinedQuery = await supabase
+  const { data: listings, error } = await supabase
     .from("listings")
-    .select(
-      "address, expected_completion_date, id, image_url, postal_code, projected_price, title, agents!inner(id, full_name, email, is_active)"
-    )
+    .select("*")
     .in("status", ["in_progress", "ready"])
-    .eq("agents.is_active", true)
     .order("created_at", { ascending: false });
 
-  if (!joinedQuery.error && joinedQuery.data && joinedQuery.data.length > 0) {
-    return joinedQuery.data as OffMarketListing[];
+  console.log("OFF MARKET LISTINGS:", listings);
+
+  if (error) {
+    return [];
   }
 
-  const fallbackQuery = await supabase
-    .from("listings")
-    .select(
-      "address, expected_completion_date, id, image_url, postal_code, projected_price, title"
-    )
-    .in("status", ["in_progress", "ready"])
-    .order("created_at", { ascending: false });
-
-  return fallbackQuery.error
-    ? []
-    : ((fallbackQuery.data ?? []) as OffMarketListing[]);
+  return (listings ?? []) as OffMarketListing[];
 }
 
 export default async function OffMarketPage() {

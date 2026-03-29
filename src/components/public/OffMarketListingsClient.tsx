@@ -7,7 +7,7 @@ import OpportunityListingCard, {
 } from "@/components/public/OpportunityListingCard";
 
 export type OffMarketListing = OpportunityListingCardData & {
-  postal_code: string;
+  postal_code: string | null;
 };
 
 export default function OffMarketListingsClient({
@@ -23,7 +23,7 @@ export default function OffMarketListingsClient({
     }
 
     return listings.filter((listing) =>
-      listing.postal_code.toLowerCase().includes(postalCode.toLowerCase())
+      (listing.postal_code ?? "").toLowerCase().includes(postalCode.toLowerCase())
     );
   }, [listings, postalCode]);
 
