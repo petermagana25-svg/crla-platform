@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarDays, Home, MapPin } from "lucide-react";
 import Container from "@/components/layout/Container";
 import Navbar from "@/components/layout/Navbar";
 import LeadMessageButton from "@/components/public/LeadMessageButton";
+import ListingViewTracker from "@/components/public/ListingViewTracker";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 type ListingDetail = {
@@ -132,6 +133,11 @@ export default async function OffMarketListingDetailPage({
             </div>
           ) : (
             <>
+              <ListingViewTracker
+                listingId={listing.id}
+                agentId={listing.agent_id}
+              />
+
               <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
                 <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/5 shadow-[0_35px_90px_rgba(0,0,0,.30)]">
                   <div className="relative aspect-square w-full">

@@ -17,6 +17,29 @@ export default function OffMarketListingsClient({
 }) {
   const [postalCode, setPostalCode] = useState("");
 
+  async function trackListingClick(listingId: string, agentId?: string | null) {
+    console.log("TRACK LISTING CLICK", listingId);
+
+    if (!agentId) {
+      return;
+    }
+
+    try {
+      await fetch("/api/listing-view", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          listing_id: listingId,
+          agent_id: agentId,
+        }),
+      });
+    } catch (error) {
+      console.error("Unable to track listing click:", error);
+    }
+  }
+
   const filteredListings = useMemo(() => {
     if (!postalCode.trim()) {
       return listings;
@@ -50,6 +73,9 @@ export default function OffMarketListingsClient({
           <OpportunityListingCard
             key={listing.id}
             href={`/off-market/${listing.id}`}
+            onClick={() => {
+              void trackListingClick(listing.id, listing.agent_id);
+            }}
             listing={listing}
           />
         ))}

@@ -11,6 +11,7 @@ type LeadMessageButtonProps = {
   disabled?: boolean;
   listingId?: string | null;
   listingTitle?: string | null;
+  onOpen?: () => void;
 };
 
 export default function LeadMessageButton({
@@ -21,6 +22,7 @@ export default function LeadMessageButton({
   disabled = false,
   listingId = null,
   listingTitle = null,
+  onOpen,
 }: LeadMessageButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -159,7 +161,14 @@ export default function LeadMessageButton({
       <button
         type="button"
         disabled={isUnavailable}
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          if (isUnavailable) {
+            return;
+          }
+
+          onOpen?.();
+          setIsOpen(true);
+        }}
         className={`${className} ${isUnavailable ? "cursor-not-allowed opacity-60" : ""}`}
       >
         {buttonLabel}

@@ -26,7 +26,6 @@ import {
   Star,
   User,
   Users,
-  Briefcase,
   PlayCircle,
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
@@ -107,34 +106,6 @@ type ActivationStepStatus = "completed" | "in_progress" | "pending";
 
 const subtleHeaderButtonClass =
   "inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60";
-
-// TODO: Replace these dashboard cards with live analytics once reporting data is available.
-const metricCards = [
-  {
-    icon: <Eye size={20} />,
-    title: "Profile Views",
-    value: "1,284",
-    detail: "Viewed by homeowners this month",
-  },
-  {
-    icon: <MousePointerClick size={20} />,
-    title: "Listing Clicks",
-    value: "372",
-    detail: "Buyer engagement across your listings",
-  },
-  {
-    icon: <Users size={20} />,
-    title: "Leads Received",
-    value: "24",
-    detail: "New inquiries from the platform",
-  },
-  {
-    icon: <Briefcase size={20} />,
-    title: "Deals Closed",
-    value: "7",
-    detail: "Closed transactions this quarter",
-  },
-] as const;
 
 // TODO: Wire certification and training progress to real member progress data.
 const progressCards = [
@@ -546,6 +517,9 @@ export default function AgentDashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [listingViewCount, setListingViewCount] = useState(0);
+  const [leadsCount, setLeadsCount] = useState(0);
+  const [profileViewCount, setProfileViewCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   async function loadDashboard() {
@@ -560,6 +534,10 @@ export default function AgentDashboardPage() {
       return;
     }
 
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoIso = thirtyDaysAgo.toISOString();
+
     const [
       { data: agentAccessRaw },
       { data: profileData },
@@ -567,6 +545,9 @@ export default function AgentDashboardPage() {
       { data: academyResourceData, error: academyResourcesError },
       { data: membershipsData, error: membershipsError },
       { data: listingData, error: listingsError },
+      { count: profileViewsCount, error: profileViewsError },
+      { count: listingViewsCount, error: listingViewsError },
+      { count: messagesCount, error: messagesCountError },
       { count: unreadMessagesCount, error: unreadMessagesError },
     ] =
       await Promise.all([
@@ -609,6 +590,21 @@ export default function AgentDashboardPage() {
           .order("created_at", { ascending: false })
           .limit(3),
         supabase
+          .from("profile_views")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .gte("created_at", thirtyDaysAgoIso),
+        supabase
+          .from("listing_views")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .gte("created_at", thirtyDaysAgoIso),
+        supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .gte("created_at", thirtyDaysAgoIso),
+        supabase
           .from("messages")
           .select("id", { count: "exact", head: true })
           .eq("agent_id", user.id)
@@ -640,6 +636,9 @@ export default function AgentDashboardPage() {
       membershipsError ? null : selectPreferredMembership(membershipsData ?? [])
     );
     setListings(listingsError ? [] : ((listingData ?? []) as Listing[]));
+    setProfileViewCount(profileViewsError ? 0 : profileViewsCount ?? 0);
+    setListingViewCount(listingViewsError ? 0 : listingViewsCount ?? 0);
+    setLeadsCount(messagesCountError ? 0 : messagesCount ?? 0);
     setUnreadMessageCount(
       unreadMessagesError ? 0 : unreadMessagesCount ?? 0
     );
@@ -714,6 +713,35 @@ export default function AgentDashboardPage() {
     agentAccess?.city ?? null,
     agentAccess?.state ?? null
   );
+  const totalViews = profileViewCount + listingViewCount;
+  const engagementRate =
+    totalViews > 0 ? ((leadsCount / totalViews) * 100).toFixed(1) : "0";
+  const dashboardMetricCards = [
+    {
+      icon: <Eye size={20} />,
+      title: "Profile Views",
+      value: profileViewCount.toLocaleString("en-US"),
+      detail: "Directory views in the last 30 days",
+    },
+    {
+      icon: <MousePointerClick size={20} />,
+      title: "Listing Views",
+      value: listingViewCount.toLocaleString("en-US"),
+      detail: "Property interactions in the last 30 days",
+    },
+    {
+      icon: <Users size={20} />,
+      title: "Leads Received",
+      value: leadsCount.toLocaleString("en-US"),
+      detail: "Messages received in the last 30 days",
+    },
+    {
+      icon: <Star size={20} />,
+      title: "Engagement Rate",
+      value: `${engagementRate}%`,
+      detail: "Leads divided by profile and listing views",
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-[var(--navy-dark)] text-white">
@@ -1004,7 +1032,7 @@ export default function AgentDashboardPage() {
               </div>
 
               <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                {metricCards.map((card) => (
+                {dashboardMetricCards.map((card) => (
                   <MetricCard
                     key={card.title}
                     icon={card.icon}

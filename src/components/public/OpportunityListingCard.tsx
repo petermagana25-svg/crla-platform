@@ -6,6 +6,7 @@ import { Home, MapPin } from "lucide-react";
 
 export type OpportunityListingCardData = {
   address: string;
+  agent_id?: string | null;
   expected_completion_date: string | null;
   id: string;
   image_url: string | null;
@@ -38,9 +39,11 @@ function formatDate(value: string | null) {
 
 export default function OpportunityListingCard({
   href,
+  onClick,
   listing,
 }: {
   href?: string;
+  onClick?: () => void;
   listing: OpportunityListingCardData;
 }) {
   const card = (
@@ -85,5 +88,11 @@ export default function OpportunityListingCard({
     </article>
   );
 
-  return href ? <Link href={href} className="block">{card}</Link> : card;
+  return href ? (
+    <Link href={href} onClick={onClick} className="block">
+      {card}
+    </Link>
+  ) : (
+    card
+  );
 }
