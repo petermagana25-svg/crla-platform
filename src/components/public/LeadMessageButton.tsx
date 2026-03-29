@@ -66,8 +66,8 @@ export default function LeadMessageButton({
     return () => window.clearTimeout(closeTimer);
   }, [isOpen, success]);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitMessage() {
+    console.log("SUBMIT START");
 
     if (!agentId) {
       console.error("Missing agent_id — cannot send message");
@@ -80,6 +80,7 @@ export default function LeadMessageButton({
     }
 
     if (!senderName.trim() || !senderEmail.trim()) {
+      alert("Please enter your name and email");
       setError("Please enter your name and email so the agent can reply.");
       return;
     }
@@ -100,8 +101,9 @@ export default function LeadMessageButton({
       };
 
       console.log("Submitting payload:", payload);
+      console.log("Before fetch");
 
-      const response = await fetch("/api/messages", {
+      const res = await fetch("/api/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,9 +111,10 @@ export default function LeadMessageButton({
         body: JSON.stringify(payload),
       });
 
-      console.log("Response", response);
+      console.log("Response status:", res.status);
+      console.log("Response", res);
 
-      const data = (await response.json().catch(() => null)) as
+      const data = (await res.json().catch(() => null)) as
         | {
             error?: { message?: string };
             success?: boolean;
@@ -120,9 +123,11 @@ export default function LeadMessageButton({
 
       console.log("Response body", data);
 
-      if (!response.ok || !data?.success) {
+      if (!res.ok || !data?.success) {
         console.error("Message failed:", data);
-        throw new Error(data?.error?.message || "Unable to send message.");
+        alert("Something went wrong");
+        setError(data?.error?.message || "Unable to send message.");
+        return;
       }
 
       setSuccess(true);
@@ -138,6 +143,15 @@ export default function LeadMessageButton({
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSubmit(event?: React.FormEvent<HTMLFormElement>) {
+    if (event) {
+      event.preventDefault();
+    }
+
+    console.log("CLICKED");
+    void submitMessage();
   }
 
   return (
@@ -239,7 +253,8 @@ export default function LeadMessageButton({
                 </p>
 
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => handleSubmit()}
                   disabled={loading || !message.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
