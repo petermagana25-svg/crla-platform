@@ -14,8 +14,6 @@ async function fetchOffMarketListings() {
     .in("status", ["in_progress", "ready"])
     .order("created_at", { ascending: false });
 
-  console.log("OFF MARKET LISTINGS:", listings);
-
   if (error) {
     return [];
   }

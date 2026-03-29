@@ -254,6 +254,7 @@ export default function ListingForm({
           : await supabase.from("listings").insert({
               ...payload,
               agent_id: user.id,
+              status: "in_progress",
             });
 
       if (error) {
