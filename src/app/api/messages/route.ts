@@ -15,37 +15,56 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export async function POST(request: Request) {
+function isValidUUID(id: string) {
+  return /^[0-9a-fA-F-]{36}$/.test(id);
+}
+
+export async function POST(req: Request) {
   try {
-    const body = (await request.json()) as Body;
+    const body = (await req.json()) as Body;
     console.log("Incoming message:", body);
-    const agentId = body.agent_id?.trim();
-    const listingId = body.listing_id?.trim() || null;
+    const agent_id =
+      typeof body.agent_id === "string" ? body.agent_id.trim() : null;
+    const sender_name = body.sender_name?.trim();
+    const sender_email = body.sender_email?.trim();
     const message = body.message?.trim();
-    const senderName = body.sender_name?.trim() || null;
-    const senderEmail = body.sender_email?.trim() || null;
+    const listing_id =
+      typeof body.listing_id === "string" &&
+      body.listing_id.trim() !== "" &&
+      body.listing_id !== "undefined"
+        ? body.listing_id.trim()
+        : null;
 
-    if (!agentId) {
+    if (!agent_id || !isValidUUID(agent_id)) {
+      console.error("Invalid agent_id:", agent_id);
       return NextResponse.json(
-        {
-          success: false,
-          error: { message: "A valid agent is required." },
-        },
+        { error: "Invalid agent_id" },
         { status: 400 }
       );
     }
 
-    if (!message) {
+    if (listing_id && !isValidUUID(listing_id)) {
+      console.error("Invalid listing_id:", listing_id);
       return NextResponse.json(
-        {
-          success: false,
-          error: { message: "Message is required." },
-        },
+        { error: "Invalid listing_id" },
         { status: 400 }
       );
     }
 
-    if (senderEmail && !isValidEmail(senderEmail)) {
+    if (!sender_name || !sender_email || !message) {
+      console.error("Missing required fields:", {
+        sender_name,
+        sender_email,
+        message,
+      });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEmail(sender_email)) {
+      console.error("Invalid sender_email in message payload:", sender_email);
       return NextResponse.json(
         {
           success: false,
@@ -55,11 +74,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl =
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing Supabase admin configuration.");
+    if (!serviceRoleKey) {
+      console.error("Missing SERVICE ROLE KEY");
+      throw new Error("Missing Supabase service role key.");
+    }
+
+    if (!supabaseUrl) {
+      console.error("Missing SUPABASE_URL");
+      throw new Error("Missing Supabase URL.");
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
@@ -69,75 +95,42 @@ export async function POST(request: Request) {
       },
     });
 
-    const { data: agent, error: agentError } = await supabaseAdmin
-      .from("agents")
-      .select("id")
-      .eq("id", agentId)
-      .maybeSingle();
+    try {
+      const { error } = await supabaseAdmin.from("messages").insert({
+        agent_id,
+        listing_id,
+        sender_name,
+        sender_email,
+        message,
+        status: "new",
+      });
 
-    if (agentError || !agent) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { message: "This agent is no longer available." },
-        },
-        { status: 404 }
-      );
-    }
-
-    if (listingId) {
-      const { data: listing, error: listingError } = await supabaseAdmin
-        .from("listings")
-        .select("id")
-        .eq("id", listingId)
-        .eq("agent_id", agentId)
-        .maybeSingle();
-
-      if (listingError || !listing) {
+      if (error) {
+        console.error("Insert error:", error);
         return NextResponse.json(
-          {
-            success: false,
-            error: { message: "This listing is no longer available." },
-          },
+          { error: error.message },
           { status: 400 }
         );
       }
+
+      return NextResponse.json({ success: true });
+    } catch (err) {
+      console.error("API ERROR:", err);
+      return NextResponse.json(
+        { error: "Server failed" },
+        { status: 500 }
+      );
     }
-
-    try {
-      const { data: insertedMessage, error: insertError } = await supabaseAdmin
-        .from("messages")
-        .insert({
-          agent_id: agentId,
-          listing_id: listingId,
-          message,
-          sender_email: senderEmail,
-          sender_name: senderName,
-          status: "new",
-        })
-        .select("id")
-        .single();
-
-      if (insertError || !insertedMessage) {
-        throw new Error(insertError?.message || "Unable to send message.");
-      }
-    } catch (error) {
-      console.error("Message insert error:", error);
-      throw error;
-    }
-
-    return NextResponse.json({
-      success: true,
-    });
   } catch (error) {
-    console.error("Message insert error:", error);
+    console.error("API ERROR:", error);
+    const message =
+      error instanceof Error ? error.message : "Server error";
+
     return NextResponse.json(
       {
         success: false,
-        error: {
-          message:
-            error instanceof Error ? error.message : "Unable to send message.",
-        },
+        error: { message },
+        message,
       },
       { status: 500 }
     );
