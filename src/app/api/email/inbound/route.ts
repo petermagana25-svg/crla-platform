@@ -77,33 +77,22 @@ export async function POST(req: Request) {
       typeof body.data.subject === "string"
       ? body.data.subject
       : "";
-    const rawText =
-      (typeof body?.data === "object" &&
+    const raw =
+      typeof body?.data === "object" &&
       body.data !== null &&
-      "text" in body.data &&
-      typeof body.data.text === "string"
-        ? body.data.text
-        : "") ||
-      (typeof body?.data === "object" &&
-      body.data !== null &&
-      "html" in body.data &&
-      typeof body.data.html === "string"
-        ? body.data.html
-        : "") ||
-      (typeof body?.data === "object" &&
-      body.data !== null &&
-      "snippet" in body.data &&
-      typeof body.data.snippet === "string"
-        ? body.data.snippet
-        : "") ||
-      "";
-    const cleanText = rawText
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n")
+      "raw" in body.data &&
+      typeof body.data.raw === "string"
+        ? body.data.raw
+        : "";
+    console.log("📦 RAW EMAIL:", raw);
+
+    const matchBody = raw.match(/\r\n\r\n([\s\S]*)$/);
+    const extracted = matchBody ? matchBody[1].trim() : "";
+    const cleanText = extracted
       .replace(/<[^>]+>/g, "")
+      .replace(/\r\n/g, "\n")
       .trim();
-    const finalText = cleanText.split("On ").shift()?.trim() || "";
-    const message = finalText || "(no content)";
+    const message = cleanText || "(no content)";
     const fromEmail =
       typeof body?.data === "object" &&
       body.data !== null &&
@@ -122,8 +111,7 @@ export async function POST(req: Request) {
 
     console.log("📩 FROM:", senderEmail);
     console.log("📌 SUBJECT:", subject);
-    console.log("📩 RAW BODY:", rawText);
-    console.log("🧹 CLEAN BODY:", finalText);
+    console.log("📩 EXTRACTED MESSAGE:", message);
 
     const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
     const conversationId = match ? match[1] : null;
