@@ -90,7 +90,7 @@ export async function sendEmail({
     : subject;
   const signature = `
   <br/><br/>
-  —<br/>
+  Best regards,<br/>
   <strong>${escapeHtml(trimmedAgentName)}</strong><br/>
   CRLA Certified Agent<br/>
   📞 ${escapeHtml(trimmedAgentPhone)}<br/>
@@ -98,7 +98,7 @@ export async function sendEmail({
 `;
   const htmlWithSignature = `${html}${signature}`;
   const textWithSignature = text
-    ? `${text}\n\n--\n${trimmedAgentName}\nCRLA Certified Agent\nPhone: ${trimmedAgentPhone}\nEmail: ${signatureEmail}`
+    ? `${text}\n\nBest regards,\n${trimmedAgentName}\nCRLA Certified Agent\nPhone: ${trimmedAgentPhone}\nEmail: ${signatureEmail}`
     : undefined;
 
   console.log('EMAIL SEND CONFIG:', {

@@ -952,13 +952,15 @@ export default function InboxPage() {
                           <div
                             className={`max-w-[85%] rounded-3xl px-5 py-4 ${
                               message.sender_type === "agent"
-                                ? "bg-[rgba(212,175,55,0.16)] text-white shadow-[0_12px_30px_rgba(212,175,55,0.10)]"
-                                : "border border-white/10 bg-white/5 text-white/88"
+                                ? "border border-slate-400/20 bg-[rgba(148,163,184,0.16)] text-white shadow-[0_12px_30px_rgba(148,163,184,0.10)]"
+                                : "border border-sky-400/25 bg-[rgba(56,189,248,0.14)] text-white/92 shadow-[0_12px_30px_rgba(56,189,248,0.10)]"
                             }`}
                           >
                             <div className="flex items-center justify-between gap-4">
                               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                                {message.sender_type === "agent" ? "Agent Reply" : "Lead Message"}
+                                {message.sender_type === "client"
+                                  ? "CLIENT MESSAGE"
+                                  : "AGENT REPLY"}
                               </p>
                               <span className="text-xs text-white/35">
                                 {formatTimestamp(message.created_at)}

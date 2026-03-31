@@ -1,7 +1,15 @@
-import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
+
+function okResponse() {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
 
 function extractEmailAddress(value: unknown) {
   if (typeof value === "object" && value !== null) {
@@ -38,59 +46,122 @@ function stripHtml(value: string) {
   return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function extractConversationId(subject: string) {
-  const match = subject.match(/\(#([^)]+)\)/);
-  return match?.[1]?.trim() || null;
-}
+export async function POST(req: Request) {
+  console.log("🔥 WEBHOOK RECEIVED RAW");
 
-export async function POST(request: Request) {
   try {
-    const payload = (await request.json().catch(() => null)) as
-      | Record<string, unknown>
-      | null;
+    const rawBody = await req.text();
 
-    const eventType =
-      (typeof payload?.type === "string" ? payload.type : null) ??
-      (typeof payload?.event === "string" ? payload.event : null);
-    const emailPayload =
-      typeof payload?.data === "object" && payload.data !== null
-        ? (payload.data as Record<string, unknown>)
-        : payload;
+    let body: Record<string, unknown> | null;
 
-    if (eventType && eventType !== "email.received") {
-      return NextResponse.json({ success: true, ignored: true });
+    try {
+      body = (rawBody ? JSON.parse(rawBody) : null) as Record<string, unknown> | null;
+    } catch (e) {
+      console.error("❌ JSON PARSE ERROR", e);
+      return okResponse();
     }
 
-    const from = extractEmailAddress(emailPayload?.from);
-    const senderName = extractSenderName(emailPayload?.from);
+    console.log("📩 RAW BODY:", JSON.stringify(body, null, 2));
+
+    const eventType =
+      (typeof body?.type === "string" ? body.type : null) ??
+      (typeof body?.event === "string" ? body.event : null);
+    const payload =
+      typeof body?.data === "object" && body.data !== null
+        ? (body.data as Record<string, unknown>)
+        : body;
+
+    if (eventType && eventType !== "email.received") {
+      return okResponse();
+    }
+
     const subject =
-      typeof emailPayload?.subject === "string" ? emailPayload.subject : "";
-    const conversationId = extractConversationId(subject);
-    const textBody =
-      typeof emailPayload?.text === "string"
-        ? emailPayload.text
-        : typeof emailPayload?.textBody === "string"
-          ? emailPayload.textBody
-          : null;
-    const htmlBody =
-      typeof emailPayload?.html === "string"
-        ? emailPayload.html
-        : typeof emailPayload?.htmlBody === "string"
-          ? emailPayload.htmlBody
-          : null;
-    const messageText = (textBody ?? (htmlBody ? stripHtml(htmlBody) : "")).trim();
+      (typeof payload?.subject === "string" ? payload.subject : "") ||
+      (typeof body?.subject === "string" ? body.subject : "");
+    const rawText =
+      (typeof payload?.text === "string" ? payload.text : "") ||
+      (typeof body?.text === "string" ? body.text : "") ||
+      (typeof payload?.html === "string" ? payload.html : "") ||
+      (typeof body?.html === "string" ? body.html : "") ||
+      (typeof payload?.textBody === "string" ? payload.textBody : "") ||
+      (typeof payload?.htmlBody === "string" ? payload.htmlBody : "");
+    const text =
+      typeof rawText === "string" && rawText.includes("<")
+        ? stripHtml(rawText)
+        : rawText.trim();
+    const fromEmail =
+      extractEmailAddress(payload?.from) ??
+      extractEmailAddress(body?.from) ??
+      "";
+    const senderName = extractSenderName(payload?.from) ?? extractSenderName(body?.from);
 
-    console.log("INBOUND EMAIL:", {
-      from,
-      subject,
-      conversationId,
-    });
+    console.log("📩 FROM:", fromEmail);
+    console.log("📌 SUBJECT:", subject);
 
-    if (!conversationId || !messageText) {
-      return NextResponse.json({ success: true, ignored: true });
+    const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
+    const conversationId = match ? match[1] : null;
+
+    console.log("📌 PARSED CONVERSATION ID:", conversationId);
+
+    if (!text || !fromEmail) {
+      console.log("⚠️ INVALID PAYLOAD — SKIPPING INSERT");
+      return okResponse();
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
+
+    if (!conversationId) {
+      console.log("⚠️ NO CONVERSATION ID — FALLBACK INSERT");
+
+      const { data: fallbackTarget, error: fallbackLookupError } =
+        await supabaseAdmin
+          .from("messages")
+          .select("agent_id, listing_id")
+          .eq("sender_email", fromEmail)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      if (fallbackLookupError) {
+        console.error("Fallback lookup error:", fallbackLookupError);
+        return okResponse();
+      }
+
+      if (!fallbackTarget) {
+        console.log("⚠️ NO FALLBACK TARGET FOUND");
+        return okResponse();
+      }
+
+      try {
+        const { data: insertResult, error } = await supabaseAdmin
+          .from("messages")
+          .insert({
+            agent_id: fallbackTarget.agent_id,
+            conversation_id: null,
+            created_at: new Date().toISOString(),
+            listing_id: fallbackTarget.listing_id,
+            message: text,
+            sender_email: fromEmail,
+            sender_name: senderName,
+            sender_type: "client",
+            status: "unread",
+          })
+          .select();
+
+        if (error) {
+          console.error("❌ INSERT ERROR:", error);
+        } else {
+          console.log("✅ INSERT SUCCESS");
+        }
+
+        console.log("✅ INSERT RESULT:", insertResult);
+      } catch (err) {
+        console.error("❌ INSERT CRASH:", err);
+      }
+
+      return okResponse();
+    }
+
     const { data: existingConversation, error: conversationLookupError } =
       await supabaseAdmin
         .from("messages")
@@ -102,37 +173,44 @@ export async function POST(request: Request) {
 
     if (conversationLookupError) {
       console.error("Inbound conversation lookup error:", conversationLookupError);
-      return NextResponse.json({ success: true, ignored: true });
+      return okResponse();
     }
 
     if (!existingConversation) {
-      return NextResponse.json({ success: true, ignored: true });
+      console.log("⚠️ NO CONVERSATION FOUND");
+      return okResponse();
     }
 
-    console.log("INSERTING MESSAGE:", {
-      conversation_id: conversationId,
-      sender_type: "client",
-      message: messageText,
-    });
+    try {
+      const { data: insertResult, error } = await supabaseAdmin
+        .from("messages")
+        .insert({
+          agent_id: existingConversation.agent_id,
+          conversation_id: conversationId,
+          created_at: new Date().toISOString(),
+          listing_id: existingConversation.listing_id,
+          message: text,
+          sender_email: fromEmail,
+          sender_name: senderName,
+          sender_type: "client",
+          status: "unread",
+        })
+        .select();
 
-    const { error: insertError } = await supabaseAdmin.from("messages").insert({
-      agent_id: existingConversation.agent_id,
-      conversation_id: conversationId,
-      listing_id: existingConversation.listing_id,
-      message: messageText,
-      sender_email: from,
-      sender_name: senderName,
-      sender_type: "client",
-      status: "unread",
-    });
+      if (error) {
+        console.error("❌ INSERT ERROR:", error);
+      } else {
+        console.log("✅ INSERT SUCCESS");
+      }
 
-    if (insertError) {
-      console.error("Inbound insert error:", insertError);
+      console.log("✅ INSERT RESULT:", insertResult);
+    } catch (err) {
+      console.error("❌ INSERT CRASH:", err);
     }
 
-    return NextResponse.json({ success: true });
+    return okResponse();
   } catch (error) {
-    console.error("Inbound webhook error:", error);
-    return NextResponse.json({ success: true, ignored: true });
+    console.error("❌ INBOUND ERROR:", error);
+    return okResponse();
   }
 }

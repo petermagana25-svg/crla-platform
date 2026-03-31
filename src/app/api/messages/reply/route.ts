@@ -128,10 +128,8 @@ export async function POST(request: Request) {
       conversationId: conversation.conversationId,
       html: `
         <p>${escapeHtml(replyText).replace(/\n/g, "<br/>")}</p>
-        <br/>
-        <p>Best regards,<br/>CRLA Agent</p>
       `,
-      text: `${replyText}\n\nBest regards,\nCRLA Agent`,
+      text: replyText,
       agentEmail: agentRecord?.email,
       agentName: agentRecord?.full_name,
       agentPhone: agentRecord?.phone_number,
