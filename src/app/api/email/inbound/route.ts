@@ -42,10 +42,6 @@ function extractSenderName(value: unknown) {
   return name ? name.replace(/^["']|["']$/g, "") : null;
 }
 
-function stripHtml(value: string) {
-  return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
-
 export async function POST(req: Request) {
   console.log("🔥 WEBHOOK RECEIVED RAW");
 
@@ -82,14 +78,32 @@ export async function POST(req: Request) {
       ? body.data.subject
       : "";
     const rawText =
-      (typeof payload?.text === "string" ? payload.text : "") ||
-      (typeof payload?.html === "string" ? payload.html : "") ||
-      (typeof payload?.snippet === "string" ? payload.snippet : "") ||
-      "(no content)";
-    const text =
-      typeof rawText === "string" && rawText.includes("<")
-        ? stripHtml(rawText)
-        : rawText.trim();
+      (typeof body?.data === "object" &&
+      body.data !== null &&
+      "text" in body.data &&
+      typeof body.data.text === "string"
+        ? body.data.text
+        : "") ||
+      (typeof body?.data === "object" &&
+      body.data !== null &&
+      "html" in body.data &&
+      typeof body.data.html === "string"
+        ? body.data.html
+        : "") ||
+      (typeof body?.data === "object" &&
+      body.data !== null &&
+      "snippet" in body.data &&
+      typeof body.data.snippet === "string"
+        ? body.data.snippet
+        : "") ||
+      "";
+    const cleanText = rawText
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+    const finalText = cleanText.split("On ").shift()?.trim() || "";
+    const message = finalText || "(no content)";
     const fromEmail =
       typeof body?.data === "object" &&
       body.data !== null &&
@@ -108,7 +122,8 @@ export async function POST(req: Request) {
 
     console.log("📩 FROM:", senderEmail);
     console.log("📌 SUBJECT:", subject);
-    console.log("📩 MESSAGE CONTENT:", text);
+    console.log("📩 RAW BODY:", rawText);
+    console.log("🧹 CLEAN BODY:", finalText);
 
     const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
     const conversationId = match ? match[1] : null;
@@ -172,7 +187,7 @@ export async function POST(req: Request) {
         sender_email: senderEmail,
         conversation_id: conversationId,
         sender_type: senderType,
-        message: text || "(no content)",
+        message,
       });
 
       const { data: insertResult, error } = await supabaseAdmin
@@ -182,7 +197,7 @@ export async function POST(req: Request) {
           conversation_id: conversationId,
           created_at: new Date().toISOString(),
           listing_id: listingId,
-          message: text || "(no content)",
+          message,
           sender_email: senderEmail,
           sender_name: senderEmail,
           sender_type: senderType,
