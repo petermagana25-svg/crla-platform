@@ -2,7 +2,7 @@ import 'server-only';
 
 import { Resend } from 'resend';
 
-export const EMAIL_FROM = 'CRLA <noreply@send.crladirectory.com>';
+export const EMAIL_FROM = 'CRLA <noreply@crladirectory.com>';
 
 type SendEmailArgs = {
   to: string;
@@ -45,7 +45,15 @@ export async function sendEmail({ to, subject, html, text }: SendEmailArgs) {
     throw new Error('Invalid sending domain');
   }
 
-  console.log('Sending email from:', EMAIL_FROM);
+  if (!EMAIL_FROM.endsWith('@crladirectory.com>')) {
+    throw new Error('Email must use verified root domain');
+  }
+
+  console.log('EMAIL DEBUG:', {
+    from: EMAIL_FROM,
+    to,
+    subject,
+  });
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const { data, error } = await resend.emails.send({
