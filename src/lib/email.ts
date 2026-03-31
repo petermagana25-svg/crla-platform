@@ -84,11 +84,7 @@ export async function sendEmail({
     ? trimmedAgentEmail
     : EMAIL_REPLY_TO_FALLBACK;
   const trimmedConversationId = conversationId?.trim() || null;
-  const replyTo = trimmedConversationId
-    ? EMAIL_REPLY_TO_INBOUND
-    : isValidEmail(trimmedAgentEmail)
-      ? trimmedAgentEmail
-      : EMAIL_REPLY_TO_FALLBACK;
+  const replyTo = EMAIL_REPLY_TO_INBOUND;
   const resolvedSubject = trimmedConversationId
     ? `Re: Your inquiry (#${trimmedConversationId})`
     : subject;
@@ -105,11 +101,10 @@ export async function sendEmail({
     ? `${text}\n\n--\n${trimmedAgentName}\nCRLA Certified Agent\nPhone: ${trimmedAgentPhone}\nEmail: ${signatureEmail}`
     : undefined;
 
-  console.log('EMAIL DEBUG:', {
+  console.log('EMAIL SEND CONFIG:', {
     from: EMAIL_FROM,
-    reply_to: replyTo,
+    reply_to: EMAIL_REPLY_TO_INBOUND,
     to,
-    subject: resolvedSubject,
   });
 
   const resend = new Resend(process.env.RESEND_API_KEY);
