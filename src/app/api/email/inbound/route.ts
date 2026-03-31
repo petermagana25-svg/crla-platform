@@ -83,11 +83,9 @@ export async function POST(req: Request) {
       : "";
     const rawText =
       (typeof payload?.text === "string" ? payload.text : "") ||
-      (typeof body?.text === "string" ? body.text : "") ||
       (typeof payload?.html === "string" ? payload.html : "") ||
-      (typeof body?.html === "string" ? body.html : "") ||
-      (typeof payload?.textBody === "string" ? payload.textBody : "") ||
-      (typeof payload?.htmlBody === "string" ? payload.htmlBody : "");
+      (typeof payload?.snippet === "string" ? payload.snippet : "") ||
+      "(no content)";
     const text =
       typeof rawText === "string" && rawText.includes("<")
         ? stripHtml(rawText)
@@ -110,14 +108,15 @@ export async function POST(req: Request) {
 
     console.log("📩 FROM:", senderEmail);
     console.log("📌 SUBJECT:", subject);
+    console.log("📩 MESSAGE CONTENT:", text);
 
     const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
     const conversationId = match ? match[1] : null;
 
     console.log("📌 PARSED CONVERSATION ID:", conversationId);
 
-    if (!text || !senderEmail) {
-      console.log("⚠️ INVALID PAYLOAD — SKIPPING INSERT");
+    if (!senderEmail) {
+      console.log("⚠️ Missing sender, skipping");
       return okResponse();
     }
 
