@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type Body = {
   agent_id?: string;
@@ -19,26 +20,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Body;
     console.log("Incoming message:", body);
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("Missing SERVICE ROLE KEY");
-      return NextResponse.json(
-        { error: "Missing service role key" },
-        { status: 500 }
-      );
-    }
-
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      console.error("Missing NEXT_PUBLIC_SUPABASE_URL");
-      return NextResponse.json(
-        { error: "Missing Supabase URL" },
-        { status: 500 }
-      );
-    }
-
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabaseAdmin = createSupabaseAdminClient();
 
     const agent_id =
       typeof body.agent_id === "string" ? body.agent_id.trim() : null;
@@ -89,15 +71,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const conversationId = randomUUID();
     const { data, error } = await supabaseAdmin
       .from("messages")
       .insert({
         agent_id,
+        conversation_id: conversationId,
         listing_id,
+        content: message,
+        message,
         sender_name,
         sender_email,
-        message,
-        status: "new",
+        sender_type: "client",
+        status: "unread",
       })
       .select();
 
@@ -111,7 +97,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, conversationId });
   } catch (error) {
     console.error("FATAL ERROR:", error);
     return NextResponse.json(

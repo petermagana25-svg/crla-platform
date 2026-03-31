@@ -608,7 +608,8 @@ export default function AgentDashboardPage() {
           .from("messages")
           .select("id", { count: "exact", head: true })
           .eq("agent_id", user.id)
-          .eq("status", "new"),
+          .eq("sender_type", "client")
+          .eq("status", "unread"),
       ]);
 
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;

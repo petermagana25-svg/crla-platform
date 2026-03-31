@@ -1,21 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Inbox, Loader2, Mail, MessageSquareText, Reply, SendHorizontal } from "lucide-react";
+import {
+  Inbox,
+  Loader2,
+  Mail,
+  MessageSquareText,
+  Reply,
+  SendHorizontal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import BackToDashboardButton from "@/components/dashboard/BackToDashboardButton";
 import Container from "@/components/layout/Container";
 import Navbar from "@/components/layout/Navbar";
 import { supabase } from "@/lib/supabase";
 
+type MessageStatus = "unread" | "read" | "replied";
+type SenderType = "agent" | "client";
+
 type MessageRow = {
+  archived: boolean;
+  content: string | null;
+  conversation_id: string;
   created_at: string;
   id: string;
   listing_id: string | null;
   message: string;
   sender_email: string | null;
   sender_name: string | null;
-  status: string;
+  sender_type: SenderType;
+  status: MessageStatus;
 };
 
 type ListingReference = {
@@ -24,8 +38,19 @@ type ListingReference = {
   title: string | null;
 };
 
-type InboxMessage = MessageRow & {
+type ThreadMessage = MessageRow & {
+  body: string;
+};
+
+type InboxConversation = {
+  id: string;
+  latestMessage: ThreadMessage;
+  latestClientMessage: ThreadMessage | null;
   listingLabel: string | null;
+  messages: ThreadMessage[];
+  participantEmail: string | null;
+  participantLabel: string;
+  status: MessageStatus;
 };
 
 type InboxView = "inbox" | "archived";
@@ -56,11 +81,11 @@ function formatTimestamp(value: string) {
 }
 
 function getMessagePreview(value: string) {
-  return value.length > 60 ? `${value.slice(0, 60)}...` : value;
+  return value.length > 72 ? `${value.slice(0, 72)}...` : value;
 }
 
-function buildSenderLabel(message: InboxMessage) {
-  const leadIdentity = message.sender_name?.trim() || message.sender_email?.trim();
+function buildParticipantLabel(message: ThreadMessage | null) {
+  const leadIdentity = message?.sender_name?.trim() || message?.sender_email?.trim();
 
   if (leadIdentity) {
     return `Lead: ${leadIdentity}`;
@@ -69,16 +94,138 @@ function buildSenderLabel(message: InboxMessage) {
   return "Lead: Website visitor";
 }
 
+function getMessageBody(message: MessageRow) {
+  return message.content?.trim() || message.message?.trim() || "";
+}
+
+function deriveConversationStatus(messages: ThreadMessage[]): MessageStatus {
+  const clientMessages = messages.filter((message) => message.sender_type === "client");
+
+  if (clientMessages.some((message) => message.status === "unread")) {
+    return "unread";
+  }
+
+  const latestClientMessage = [...clientMessages].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at)
+  )[0];
+
+  if (latestClientMessage?.status === "replied") {
+    return "replied";
+  }
+
+  return "read";
+}
+
+function getConversationStatusBadgeClass(status: MessageStatus) {
+  if (status === "unread") {
+    return "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+  }
+
+  if (status === "replied") {
+    return "border border-sky-400/25 bg-sky-400/10 text-sky-100";
+  }
+
+  return "border border-white/10 bg-white/5 text-white/55";
+}
+
+function buildConversations(
+  rawMessages: MessageRow[],
+  listingsById: Record<string, ListingReference>
+) {
+  const conversationMap = new Map<string, InboxConversation>();
+
+  for (const message of rawMessages) {
+    const body = getMessageBody(message);
+    const normalizedMessage: ThreadMessage = {
+      ...message,
+      body,
+    };
+    const listing = message.listing_id ? listingsById[message.listing_id] : undefined;
+    const existingConversation = conversationMap.get(message.conversation_id);
+
+    if (!existingConversation) {
+      conversationMap.set(message.conversation_id, {
+        id: message.conversation_id,
+        latestClientMessage:
+          message.sender_type === "client" ? normalizedMessage : null,
+        latestMessage: normalizedMessage,
+        listingLabel: listing ? listing.title?.trim() || listing.address : null,
+        messages: [normalizedMessage],
+        participantEmail:
+          message.sender_type === "client" ? message.sender_email?.trim() || null : null,
+        participantLabel:
+          message.sender_type === "client"
+            ? buildParticipantLabel(normalizedMessage)
+            : "Lead: Website visitor",
+        status: message.status,
+      });
+      continue;
+    }
+
+    existingConversation.messages.push(normalizedMessage);
+
+    if (message.created_at >= existingConversation.latestMessage.created_at) {
+      existingConversation.latestMessage = normalizedMessage;
+    }
+
+    if (
+      message.sender_type === "client" &&
+      (!existingConversation.latestClientMessage ||
+        message.created_at >= existingConversation.latestClientMessage.created_at)
+    ) {
+      existingConversation.latestClientMessage = normalizedMessage;
+    }
+
+    if (!existingConversation.listingLabel && listing) {
+      existingConversation.listingLabel = listing.title?.trim() || listing.address;
+    }
+  }
+
+  return Array.from(conversationMap.values())
+    .map((conversation) => {
+      const latestClientMessage =
+        conversation.latestClientMessage ??
+        conversation.messages.find((message) => message.sender_type === "client") ??
+        null;
+
+      return {
+        ...conversation,
+        latestClientMessage,
+        messages: [...conversation.messages].sort((a, b) =>
+          a.created_at.localeCompare(b.created_at)
+        ),
+        participantEmail: latestClientMessage?.sender_email?.trim() || null,
+        participantLabel: buildParticipantLabel(latestClientMessage),
+        status: deriveConversationStatus(conversation.messages),
+      };
+    })
+    .sort((a, b) => b.latestMessage.created_at.localeCompare(a.latestMessage.created_at));
+}
+
+function updateConversationCollection(
+  current: InboxConversation[],
+  conversationId: string,
+  updater: (conversation: InboxConversation) => InboxConversation
+) {
+  return current.map((conversation) =>
+    conversation.id === conversationId ? updater(conversation) : conversation
+  );
+}
+
+function countUnreadConversations(conversations: InboxConversation[]) {
+  return conversations.filter((conversation) => conversation.status === "unread").length;
+}
+
 export default function InboxPage() {
   const router = useRouter();
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReplying, setIsReplying] = useState(false);
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
-  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [replySuccessMessage, setReplySuccessMessage] = useState<string | null>(null);
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [view, setView] = useState<InboxView>("inbox");
 
@@ -98,20 +245,18 @@ export default function InboxPage() {
         return;
       }
 
-      console.log("Inbox user id:", user.id);
-
       const { data: messageData, error: messagesError } = await supabase
         .from("messages")
         .select(
-          "id, listing_id, message, sender_name, sender_email, status, created_at"
+          "id, conversation_id, listing_id, content, message, sender_name, sender_email, sender_type, status, created_at, archived"
         )
         .eq("agent_id", user.id)
         .eq("archived", view === "archived")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
 
       if (messagesError) {
         if (isMounted) {
-          setMessages([]);
+          setConversations([]);
           setUnreadCount(0);
           setError(messagesError.message || "Unable to load messages.");
           setIsLoading(false);
@@ -142,34 +287,19 @@ export default function InboxPage() {
         return collection;
       }, {});
 
-      const mappedMessages: InboxMessage[] = rawMessages.map((message) => {
-        const listing = message.listing_id
-          ? listingsById[message.listing_id]
-          : undefined;
-
-        return {
-          ...message,
-          listingLabel: listing
-            ? listing.title?.trim() || listing.address
-            : null,
-        };
-      });
-
-      console.log("Fetched messages:", mappedMessages);
+      const mappedConversations = buildConversations(rawMessages, listingsById);
 
       if (!isMounted) {
         return;
       }
 
-      setMessages(mappedMessages);
-      setSelectedMessageId((current) =>
-        current && mappedMessages.some((message) => message.id === current)
+      setConversations(mappedConversations);
+      setSelectedConversationId((current) =>
+        current && mappedConversations.some((conversation) => conversation.id === current)
           ? current
-          : mappedMessages[0]?.id ?? null
+          : mappedConversations[0]?.id ?? null
       );
-      setUnreadCount(
-        mappedMessages.filter((message) => message.status === "new").length
-      );
+      setUnreadCount(countUnreadConversations(mappedConversations));
       setIsLoading(false);
     }
 
@@ -180,24 +310,35 @@ export default function InboxPage() {
     };
   }, [router, view]);
 
-  const selectedMessage =
-    messages.find((message) => message.id === selectedMessageId) ?? null;
+  const selectedConversation =
+    conversations.find((conversation) => conversation.id === selectedConversationId) ??
+    null;
 
-  async function handleSelectMessage(message: InboxMessage) {
-    setSelectedMessageId(message.id);
+  async function handleSelectConversation(conversation: InboxConversation) {
+    setSelectedConversationId(conversation.id);
     setActionFeedback(null);
     setReplySuccessMessage(null);
 
-    if (view === "archived" || message.status !== "new") {
+    if (view === "archived" || conversation.status !== "unread") {
       return;
     }
 
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === message.id ? { ...item, status: "read" } : item
-      )
+    const nextConversations = updateConversationCollection(
+      conversations,
+      conversation.id,
+      (currentConversation) => ({
+        ...currentConversation,
+        messages: currentConversation.messages.map((message) =>
+          message.sender_type === "client" && message.status === "unread"
+            ? { ...message, status: "read" }
+            : message
+        ),
+        status: "read",
+      })
     );
-    setUnreadCount((current) => Math.max(0, current - 1));
+
+    setConversations(nextConversations);
+    setUnreadCount(countUnreadConversations(nextConversations));
 
     try {
       await fetch("/api/messages/read", {
@@ -206,29 +347,38 @@ export default function InboxPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message_id: message.id,
+          conversation_id: conversation.id,
         }),
       });
     } catch (markReadError) {
-      console.error("Unable to mark message as read:", markReadError);
+      console.error("Unable to mark conversation as read:", markReadError);
     }
   }
 
   async function handleMarkAsUnread() {
-    if (!selectedMessage || selectedMessage.status === "new") {
+    if (!selectedConversation || selectedConversation.status === "unread") {
       return;
     }
 
     setActionFeedback(null);
     setReplySuccessMessage(null);
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === selectedMessage.id
-          ? { ...message, status: "new" }
-          : message
-      )
+
+    const nextConversations = updateConversationCollection(
+      conversations,
+      selectedConversation.id,
+      (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.sender_type === "client"
+            ? { ...message, status: "unread" }
+            : message
+        ),
+        status: "unread",
+      })
     );
-    setUnreadCount((current) => current + 1);
+
+    setConversations(nextConversations);
+    setUnreadCount(countUnreadConversations(nextConversations));
 
     try {
       const response = await fetch("/api/messages/unread", {
@@ -237,7 +387,7 @@ export default function InboxPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message_id: selectedMessage.id,
+          conversation_id: selectedConversation.id,
         }),
       });
 
@@ -254,14 +404,22 @@ export default function InboxPage() {
 
       setActionFeedback("Marked as unread");
     } catch (markUnreadError) {
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === selectedMessage.id
-            ? { ...message, status: "read" }
-            : message
-        )
+      const revertedConversations = updateConversationCollection(
+        nextConversations,
+        selectedConversation.id,
+        (conversation) => ({
+          ...conversation,
+          messages: conversation.messages.map((message) =>
+            message.sender_type === "client"
+              ? { ...message, status: "read" }
+              : message
+          ),
+          status: "read",
+        })
       );
-      setUnreadCount((current) => Math.max(0, current - 1));
+
+      setConversations(revertedConversations);
+      setUnreadCount(countUnreadConversations(revertedConversations));
       alert(
         markUnreadError instanceof Error
           ? markUnreadError.message
@@ -270,28 +428,26 @@ export default function InboxPage() {
     }
   }
 
-  async function handleArchiveMessage() {
-    if (!selectedMessage || view === "archived") {
+  async function handleArchiveConversation() {
+    if (!selectedConversation || view === "archived") {
       return;
     }
 
-    const messageToArchive = selectedMessage;
-    const nextMessages = messages.filter(
-      (message) => message.id !== messageToArchive.id
+    const conversationToArchive = selectedConversation;
+    const nextConversations = conversations.filter(
+      (conversation) => conversation.id !== conversationToArchive.id
     );
-    const currentIndex = messages.findIndex(
-      (message) => message.id === messageToArchive.id
+    const currentIndex = conversations.findIndex(
+      (conversation) => conversation.id === conversationToArchive.id
     );
-    const nextSelectedMessage =
-      nextMessages[currentIndex] ?? nextMessages[currentIndex - 1] ?? null;
+    const nextSelectedConversation =
+      nextConversations[currentIndex] ?? nextConversations[currentIndex - 1] ?? null;
 
     setActionFeedback(null);
     setReplySuccessMessage(null);
-    setMessages(nextMessages);
-    setSelectedMessageId(nextSelectedMessage?.id ?? null);
-    setUnreadCount((current) =>
-      messageToArchive.status === "new" ? Math.max(0, current - 1) : current
-    );
+    setConversations(nextConversations);
+    setSelectedConversationId(nextSelectedConversation?.id ?? null);
+    setUnreadCount(countUnreadConversations(nextConversations));
 
     try {
       const response = await fetch("/api/messages/archive", {
@@ -300,7 +456,7 @@ export default function InboxPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message_id: messageToArchive.id,
+          conversation_id: conversationToArchive.id,
         }),
       });
 
@@ -312,52 +468,52 @@ export default function InboxPage() {
         | null;
 
       if (!response.ok || !result?.success) {
-        throw new Error(result?.error?.message || "Unable to archive message.");
+        throw new Error(
+          result?.error?.message || "Unable to archive conversation."
+        );
       }
 
-      setActionFeedback("Message archived");
+      setActionFeedback("Conversation archived");
     } catch (archiveError) {
-      setMessages(messages);
-      setSelectedMessageId(messageToArchive.id);
-      setUnreadCount((current) =>
-        messageToArchive.status === "new" ? current + 1 : current
-      );
+      setConversations(conversations);
+      setSelectedConversationId(conversationToArchive.id);
+      setUnreadCount(countUnreadConversations(conversations));
       alert(
         archiveError instanceof Error
           ? archiveError.message
-          : "Unable to archive message."
+          : "Unable to archive conversation."
       );
     }
   }
 
-  async function handleDeleteMessage() {
-    if (!selectedMessage || view !== "archived") {
+  async function handleDeleteConversation() {
+    if (!selectedConversation || view !== "archived") {
       return;
     }
 
     const shouldDelete = confirm(
-      "Are you sure you want to permanently delete this message?"
+      "Are you sure you want to permanently delete this conversation?"
     );
 
     if (!shouldDelete) {
       return;
     }
 
-    const messageToDelete = selectedMessage;
-    const previousMessages = messages;
-    const nextMessages = messages.filter(
-      (message) => message.id !== messageToDelete.id
+    const conversationToDelete = selectedConversation;
+    const previousConversations = conversations;
+    const nextConversations = conversations.filter(
+      (conversation) => conversation.id !== conversationToDelete.id
     );
-    const currentIndex = messages.findIndex(
-      (message) => message.id === messageToDelete.id
+    const currentIndex = conversations.findIndex(
+      (conversation) => conversation.id === conversationToDelete.id
     );
-    const nextSelectedMessage =
-      nextMessages[currentIndex] ?? nextMessages[currentIndex - 1] ?? null;
+    const nextSelectedConversation =
+      nextConversations[currentIndex] ?? nextConversations[currentIndex - 1] ?? null;
 
     setActionFeedback(null);
     setReplySuccessMessage(null);
-    setMessages(nextMessages);
-    setSelectedMessageId(nextSelectedMessage?.id ?? null);
+    setConversations(nextConversations);
+    setSelectedConversationId(nextSelectedConversation?.id ?? null);
 
     try {
       const response = await fetch("/api/messages/delete", {
@@ -366,7 +522,7 @@ export default function InboxPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message_id: messageToDelete.id,
+          conversation_id: conversationToDelete.id,
         }),
       });
 
@@ -378,27 +534,29 @@ export default function InboxPage() {
         | null;
 
       if (!response.ok || !result?.success) {
-        throw new Error(result?.error?.message || "Unable to delete message.");
+        throw new Error(
+          result?.error?.message || "Unable to delete conversation."
+        );
       }
 
-      setActionFeedback("Message deleted permanently");
+      setActionFeedback("Conversation deleted permanently");
     } catch (deleteError) {
-      setMessages(previousMessages);
-      setSelectedMessageId(messageToDelete.id);
+      setConversations(previousConversations);
+      setSelectedConversationId(conversationToDelete.id);
       alert(
         deleteError instanceof Error
           ? deleteError.message
-          : "Unable to delete message."
+          : "Unable to delete conversation."
       );
     }
   }
 
   async function handleSendReply() {
-    if (!selectedMessage || !replyDraft.trim()) {
+    if (!selectedConversation || !replyDraft.trim()) {
       return;
     }
 
-    if (!selectedMessage.sender_email) {
+    if (!selectedConversation.participantEmail) {
       alert("This lead did not include an email address.");
       return;
     }
@@ -414,14 +572,18 @@ export default function InboxPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message_id: selectedMessage.id,
-          sender_email: selectedMessage.sender_email,
+          conversation_id: selectedConversation.id,
+          message_id: selectedConversation.latestMessage.id,
+          sender_email: selectedConversation.participantEmail,
           reply_text: replyDraft,
         }),
       });
 
       const result = (await response.json().catch(() => null)) as
         | {
+            data?: {
+              reply?: Omit<ThreadMessage, "body">;
+            };
             error?: { message?: string };
             success?: boolean;
           }
@@ -431,16 +593,42 @@ export default function InboxPage() {
         throw new Error(result?.error?.message || "Unable to send reply.");
       }
 
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === selectedMessage.id
-            ? { ...message, status: "read" }
-            : message
-        )
+      const replyMessage = result?.data?.reply
+        ? {
+            ...result.data.reply,
+            body: getMessageBody(result.data.reply as MessageRow),
+          }
+        : null;
+
+      const nextConversations = updateConversationCollection(
+        conversations,
+        selectedConversation.id,
+        (conversation) => {
+          const nextMessages = conversation.messages.map((message) =>
+            message.sender_type === "client"
+              ? { ...message, status: "replied" as const }
+              : message
+          );
+
+          if (replyMessage) {
+            nextMessages.push(replyMessage);
+          }
+
+          const latestMessage = replyMessage ?? conversation.latestMessage;
+
+          return {
+            ...conversation,
+            latestMessage,
+            messages: nextMessages.sort((a, b) =>
+              a.created_at.localeCompare(b.created_at)
+            ),
+            status: "replied",
+          };
+        }
       );
-      setUnreadCount((current) =>
-        selectedMessage.status === "new" ? Math.max(0, current - 1) : current
-      );
+
+      setConversations(nextConversations);
+      setUnreadCount(countUnreadConversations(nextConversations));
       setReplySuccessMessage("Reply sent successfully");
       setReplyDraft("");
     } catch (replyError) {
@@ -470,8 +658,8 @@ export default function InboxPage() {
                 </p>
                 <h1 className="mt-3 text-4xl font-bold md:text-5xl">Inbox</h1>
                 <p className="mt-4 max-w-2xl text-lg text-[var(--text-muted)]">
-                  Review incoming lead messages from the directory and off-market
-                  listing requests in one place.
+                  Manage lead conversations from the directory, off-market listings,
+                  and inbound email replies in one threaded inbox.
                 </p>
               </div>
 
@@ -502,7 +690,7 @@ export default function InboxPage() {
                     <Inbox size={20} />
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-white/45">
-                        New Messages
+                        Unread Conversations
                       </p>
                       <p className="mt-1 text-lg font-semibold text-white">
                         {unreadCount}
@@ -513,10 +701,10 @@ export default function InboxPage() {
                     <MessageSquareText size={20} className="text-[var(--gold-main)]" />
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-white/45">
-                        Total Messages
+                        Total Conversations
                       </p>
                       <p className="mt-1 text-lg font-semibold text-white">
-                        {messages.length}
+                        {conversations.length}
                       </p>
                     </div>
                   </div>
@@ -531,21 +719,21 @@ export default function InboxPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.34fr)_minmax(0,0.66fr)]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.4fr)_minmax(0,0.6fr)]">
             <section className="rounded-[32px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl">
               <div className="flex items-center justify-between gap-4 px-2 pb-4">
                 <div>
                   <h2 className="text-2xl font-semibold">
-                    {view === "archived" ? "Archived Messages" : "Messages"}
+                    {view === "archived" ? "Archived Conversations" : "Conversations"}
                   </h2>
                   <p className="mt-2 text-sm text-[var(--text-muted)]">
                     {view === "archived"
-                      ? "Review archived conversations or remove them permanently."
-                      : "Click a message to view the full conversation details."}
+                      ? "Review archived threads or remove them permanently."
+                      : "Open a conversation to expand the latest thread and respond."}
                   </p>
                 </div>
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
-                  {messages.length} total
+                  {conversations.length} total
                 </span>
               </div>
 
@@ -562,96 +750,124 @@ export default function InboxPage() {
                     Loading your inbox...
                   </div>
                 </div>
-              ) : messages.length === 0 ? (
+              ) : conversations.length === 0 ? (
                 <div className="mt-2 rounded-2xl border border-dashed border-white/10 bg-white/5 px-5 py-10 text-center text-sm text-slate-400">
                   {view === "archived"
-                    ? "You have no archived messages"
-                    : "You do not have any messages yet."}
+                    ? "You have no archived conversations."
+                    : "You do not have any conversations yet."}
                 </div>
               ) : (
                 <div className="mt-2 space-y-2">
-                  {messages.map((message) => (
-                    <button
-                      key={message.id}
-                      type="button"
-                      onClick={() => void handleSelectMessage(message)}
-                      className={`w-full rounded-3xl border p-4 text-left transition duration-300 ${
-                        selectedMessageId === message.id
-                          ? "border-[var(--gold-main)]/40 bg-[rgba(212,175,55,0.12)] shadow-[0_0_0_1px_rgba(212,175,55,0.12),0_16px_40px_rgba(212,175,55,.12)]"
-                          : message.status === "new"
-                            ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.05))] hover:bg-white/[0.10]"
-                            : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:bg-white/[0.08]"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-3">
-                            {message.status === "new" ? (
-                              <span className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
-                            ) : null}
-                            <div className="min-w-0">
-                              <div className="flex items-center justify-between gap-3">
-                                <p
-                                  className={`truncate text-base ${
-                                    message.status === "new"
-                                      ? "font-semibold text-white"
-                                      : "font-medium text-white/85"
-                                  }`}
-                                >
-                                  {buildSenderLabel(message)}
-                                </p>
-                                <span className="shrink-0 text-xs text-white/45">
-                                  {formatTimestamp(message.created_at)}
-                                </span>
-                              </div>
+                  {conversations.map((conversation) => {
+                    const isSelected = selectedConversationId === conversation.id;
+                    const previewThread = conversation.messages.slice(-3);
 
-                              {message.listingLabel ? (
-                                <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-[var(--gold-main)]">
-                                  {message.listingLabel}
-                                </p>
+                    return (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => void handleSelectConversation(conversation)}
+                        className={`w-full rounded-3xl border p-4 text-left transition duration-300 ${
+                          isSelected
+                            ? "border-[var(--gold-main)]/40 bg-[rgba(212,175,55,0.12)] shadow-[0_0_0_1px_rgba(212,175,55,0.12),0_16px_40px_rgba(212,175,55,.12)]"
+                            : conversation.status === "unread"
+                              ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.05))] hover:bg-white/[0.10]"
+                              : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:bg-white/[0.08]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-3">
+                              {conversation.status === "unread" ? (
+                                <span className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
                               ) : null}
+                              <div className="min-w-0">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p
+                                    className={`truncate text-base ${
+                                      conversation.status === "unread"
+                                        ? "font-semibold text-white"
+                                        : "font-medium text-white/85"
+                                    }`}
+                                  >
+                                    {conversation.participantLabel}
+                                  </p>
+                                  <span className="shrink-0 text-xs text-white/45">
+                                    {formatTimestamp(conversation.latestMessage.created_at)}
+                                  </span>
+                                </div>
 
-                              <p
-                                className={`mt-2 text-sm ${
-                                  message.status === "new"
-                                    ? "font-medium text-white/88"
-                                    : "text-[var(--text-muted)]"
-                                }`}
-                              >
-                                {getMessagePreview(message.message)}
-                              </p>
+                                {conversation.listingLabel ? (
+                                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-[var(--gold-main)]">
+                                    {conversation.listingLabel}
+                                  </p>
+                                ) : null}
 
-                              <div className="mt-3 flex items-center gap-2">
-                                <span
-                                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
-                                    message.status === "new"
-                                      ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-                                      : "border border-white/10 bg-white/5 text-white/55"
+                                <p
+                                  className={`mt-2 text-sm ${
+                                    conversation.status === "unread"
+                                      ? "font-medium text-white/88"
+                                      : "text-[var(--text-muted)]"
                                   }`}
                                 >
-                                  {message.status}
-                                </span>
+                                  {getMessagePreview(conversation.latestMessage.body)}
+                                </p>
+
+                                <div className="mt-3 flex items-center gap-2">
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${getConversationStatusBadgeClass(
+                                      conversation.status
+                                    )}`}
+                                  >
+                                    {conversation.status}
+                                  </span>
+                                  <span className="text-[11px] uppercase tracking-[0.14em] text-white/35">
+                                    {conversation.messages.length} messages
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+
+                        {isSelected ? (
+                          <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+                            {previewThread.map((message) => (
+                              <div
+                                key={message.id}
+                                className={`rounded-2xl px-3 py-2 text-sm ${
+                                  message.sender_type === "agent"
+                                    ? "bg-black/20 text-white/70"
+                                    : "bg-white/5 text-white/88"
+                                }`}
+                              >
+                                <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">
+                                  {message.sender_type === "agent" ? "Agent" : "Lead"}
+                                </p>
+                                <p className="mt-1 line-clamp-2 leading-6">
+                                  {message.body}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </section>
 
             <section className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
-              {!selectedMessage ? (
+              {!selectedConversation ? (
                 <div className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-white/5 px-6 py-12 text-center">
                   <div>
                     <p className="text-xl font-semibold text-white">
-                      Select a message to view details
+                      Select a conversation to view details
                     </p>
                     <p className="mt-3 max-w-md text-sm leading-7 text-[var(--text-muted)]">
-                      Choose a message from the list to read the full inquiry and
-                      draft a reply.
+                      Choose a conversation from the list to review the full thread
+                      and draft a reply.
                     </p>
                   </div>
                 </div>
@@ -660,15 +876,15 @@ export default function InboxPage() {
                   <div className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-sm uppercase tracking-[0.18em] text-white/45">
-                        Message Detail
+                        Conversation Detail
                       </p>
                       <h2 className="mt-3 text-3xl font-semibold text-white">
-                        {buildSenderLabel(selectedMessage)}
+                        {selectedConversation.participantLabel}
                       </h2>
-                      {selectedMessage.sender_email ? (
+                      {selectedConversation.participantEmail ? (
                         <p className="mt-3 inline-flex items-center gap-2 text-sm text-white/65">
                           <Mail size={16} className="text-[var(--gold-main)]" />
-                          {selectedMessage.sender_email}
+                          {selectedConversation.participantEmail}
                         </p>
                       ) : null}
                     </div>
@@ -679,14 +895,14 @@ export default function InboxPage() {
                           <button
                             type="button"
                             onClick={handleMarkAsUnread}
-                            disabled={selectedMessage.status === "new"}
+                            disabled={selectedConversation.status === "unread"}
                             className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[var(--gold-main)]/30 hover:text-[var(--gold-main)] disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             Mark as Unread
                           </button>
                           <button
                             type="button"
-                            onClick={handleArchiveMessage}
+                            onClick={handleArchiveConversation}
                             className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[var(--gold-main)]/30 hover:text-[var(--gold-main)]"
                           >
                             Archive
@@ -695,42 +911,67 @@ export default function InboxPage() {
                       ) : (
                         <button
                           type="button"
-                          onClick={handleDeleteMessage}
+                          onClick={handleDeleteConversation}
                           className="inline-flex items-center justify-center rounded-full border border-red-400/25 bg-red-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-red-100 transition hover:border-red-300/40 hover:bg-red-400/15"
                         >
                           Delete Permanently
                         </button>
                       )}
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
-                          selectedMessage.status === "new"
-                            ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-                            : "border border-white/10 bg-white/5 text-white/55"
-                        }`}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getConversationStatusBadgeClass(
+                          selectedConversation.status
+                        )}`}
                       >
-                        {selectedMessage.status}
+                        {selectedConversation.status}
                       </span>
                       <span className="text-sm text-white/45">
-                        {formatTimestamp(selectedMessage.created_at)}
+                        {formatTimestamp(selectedConversation.latestMessage.created_at)}
                       </span>
                     </div>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6">
-                    {selectedMessage.listingLabel ? (
+                    {selectedConversation.listingLabel ? (
                       <div>
-                        <p className="text-base font-medium text-white">
-                          {"\uD83D\uDCCD"} Property:
-                        </p>
+                        <p className="text-base font-medium text-white">Property:</p>
                         <p className="mt-2 text-lg text-white/88">
-                          {selectedMessage.listingLabel}
+                          {selectedConversation.listingLabel}
                         </p>
                       </div>
                     ) : null}
 
-                    <p className="mt-4 whitespace-pre-wrap text-base leading-8 text-white/88">
-                      {selectedMessage.message}
-                    </p>
+                    <div className="mt-5 space-y-4">
+                      {selectedConversation.messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            message.sender_type === "agent"
+                              ? "justify-end"
+                              : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-3xl px-5 py-4 ${
+                              message.sender_type === "agent"
+                                ? "bg-[rgba(212,175,55,0.16)] text-white shadow-[0_12px_30px_rgba(212,175,55,0.10)]"
+                                : "border border-white/10 bg-white/5 text-white/88"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                                {message.sender_type === "agent" ? "Agent Reply" : "Lead Message"}
+                              </p>
+                              <span className="text-xs text-white/35">
+                                {formatTimestamp(message.created_at)}
+                              </span>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-7">
+                              {message.body}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -741,7 +982,7 @@ export default function InboxPage() {
 
                     <div className="mt-5 space-y-4">
                       <p className="text-sm font-medium text-white/70">
-                        Reply to this inquiry
+                        Reply to this conversation
                       </p>
                       <textarea
                         value={replyDraft}
@@ -765,7 +1006,11 @@ export default function InboxPage() {
                       <button
                         type="button"
                         onClick={handleSendReply}
-                        disabled={!replyDraft.trim() || isReplying}
+                        disabled={
+                          !replyDraft.trim() ||
+                          isReplying ||
+                          !selectedConversation.participantEmail
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <SendHorizontal size={16} />

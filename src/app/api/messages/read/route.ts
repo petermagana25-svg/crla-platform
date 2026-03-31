@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import {
+  requireAuthenticatedMessageAgent,
+  resolveConversationRecord,
+} from "@/app/api/messages/_utils";
 
 type Body = {
   message_id?: string;
+  conversation_id?: string;
 };
 
 export const runtime = "nodejs";
@@ -11,35 +15,32 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const messageId = body.message_id?.trim();
+    const conversationId = body.conversation_id?.trim();
 
-    if (!messageId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { message: "A valid message id is required." },
-        },
-        { status: 400 }
-      );
+    const auth = await requireAuthenticatedMessageAgent();
+
+    if (!auth.ok) {
+      return auth.response;
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing Supabase admin configuration.");
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+    const conversation = await resolveConversationRecord({
+      agentId: auth.userId,
+      supabaseAdmin: auth.supabaseAdmin,
+      conversationId,
+      messageId,
     });
 
-    const { error } = await supabaseAdmin
+    if (!conversation.ok) {
+      return conversation.response;
+    }
+
+    const { error } = await auth.supabaseAdmin
       .from("messages")
       .update({ status: "read" })
-      .eq("id", messageId);
+      .eq("agent_id", auth.userId)
+      .eq("conversation_id", conversation.conversationId)
+      .eq("sender_type", "client")
+      .eq("status", "unread");
 
     if (error) {
       throw new Error(error.message || "Unable to update message status.");

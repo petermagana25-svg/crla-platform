@@ -36,6 +36,20 @@ export async function POST(request: Request) {
     }
 
     const admin = createSupabaseAdminClient();
+    const { data: approvingAdmin, error: approvingAdminError } = await admin
+      .from('agents')
+      .select('email, full_name, phone_number')
+      .eq('id', adminCheck.userId)
+      .maybeSingle();
+
+    if (approvingAdminError) {
+      return apiError(
+        'admin_lookup_failed',
+        approvingAdminError.message || 'Unable to load admin identity.',
+        500
+      );
+    }
+
     let createdUserId: string | null = null;
     let approvedUserId: string | null = null;
     let insertedAgentRow = false;
@@ -373,6 +387,9 @@ CRLA Team`;
           subject: 'Welcome to CRLA — Your Agent Access is Ready',
           html: approvalEmailHtml,
           text: approvalEmailText,
+          agentEmail: approvingAdmin?.email,
+          agentName: approvingAdmin?.full_name,
+          agentPhone: approvingAdmin?.phone_number,
         });
 
         console.log('Approval email sent to:', email);
