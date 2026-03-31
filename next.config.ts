@@ -18,6 +18,7 @@ try {
 }
 
 const nextConfig: NextConfig = {
+  skipTrailingSlashRedirect: true,
   images: {
     remotePatterns,
   },
