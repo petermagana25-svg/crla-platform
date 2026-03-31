@@ -75,9 +75,12 @@ export async function POST(req: Request) {
       return okResponse();
     }
 
-    const subject =
-      (typeof payload?.subject === "string" ? payload.subject : "") ||
-      (typeof body?.subject === "string" ? body.subject : "");
+    const subject = typeof body?.data === "object" &&
+      body.data !== null &&
+      "subject" in body.data &&
+      typeof body.data.subject === "string"
+      ? body.data.subject
+      : "";
     const rawText =
       (typeof payload?.text === "string" ? payload.text : "") ||
       (typeof body?.text === "string" ? body.text : "") ||
@@ -90,12 +93,22 @@ export async function POST(req: Request) {
         ? stripHtml(rawText)
         : rawText.trim();
     const fromEmail =
-      extractEmailAddress(payload?.from) ??
-      extractEmailAddress(body?.from) ??
-      "";
+      typeof body?.data === "object" &&
+      body.data !== null &&
+      "from" in body.data
+        ? body.data.from
+        : "";
+    const senderEmail = typeof fromEmail === "string"
+      ? fromEmail
+      : typeof fromEmail === "object" &&
+          fromEmail !== null &&
+          "email" in fromEmail &&
+          typeof fromEmail.email === "string"
+        ? fromEmail.email
+        : "";
     const senderName = extractSenderName(payload?.from) ?? extractSenderName(body?.from);
 
-    console.log("📩 FROM:", fromEmail);
+    console.log("📩 FROM:", senderEmail);
     console.log("📌 SUBJECT:", subject);
 
     const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
@@ -103,7 +116,7 @@ export async function POST(req: Request) {
 
     console.log("📌 PARSED CONVERSATION ID:", conversationId);
 
-    if (!text || !fromEmail) {
+    if (!text || !senderEmail) {
       console.log("⚠️ INVALID PAYLOAD — SKIPPING INSERT");
       return okResponse();
     }
@@ -117,7 +130,7 @@ export async function POST(req: Request) {
         await supabaseAdmin
           .from("messages")
           .select("agent_id, listing_id")
-          .eq("sender_email", fromEmail)
+          .eq("sender_email", senderEmail)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -141,7 +154,7 @@ export async function POST(req: Request) {
             created_at: new Date().toISOString(),
             listing_id: fallbackTarget.listing_id,
             message: text,
-            sender_email: fromEmail,
+            sender_email: senderEmail,
             sender_name: senderName,
             sender_type: "client",
             status: "unread",
@@ -190,7 +203,7 @@ export async function POST(req: Request) {
           created_at: new Date().toISOString(),
           listing_id: existingConversation.listing_id,
           message: text,
-          sender_email: fromEmail,
+          sender_email: senderEmail,
           sender_name: senderName,
           sender_type: "client",
           status: "unread",
