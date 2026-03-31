@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         : typeof emailPayload?.htmlBody === "string"
           ? emailPayload.htmlBody
           : null;
-    const content = (textBody ?? (htmlBody ? stripHtml(htmlBody) : "")).trim();
+    const messageText = (textBody ?? (htmlBody ? stripHtml(htmlBody) : "")).trim();
 
     console.log("INBOUND EMAIL:", {
       from,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       conversationId,
     });
 
-    if (!conversationId || !content) {
+    if (!conversationId || !messageText) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
@@ -109,12 +109,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
+    console.log("INSERTING MESSAGE:", {
+      conversation_id: conversationId,
+      sender_type: "client",
+      message: messageText,
+    });
+
     const { error: insertError } = await supabaseAdmin.from("messages").insert({
       agent_id: existingConversation.agent_id,
-      content,
       conversation_id: conversationId,
       listing_id: existingConversation.listing_id,
-      message: content,
+      message: messageText,
       sender_email: from,
       sender_name: senderName,
       sender_type: "client",

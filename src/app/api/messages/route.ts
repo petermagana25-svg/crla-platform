@@ -78,7 +78,6 @@ export async function POST(req: Request) {
         agent_id,
         conversation_id: conversationId,
         listing_id,
-        content: message,
         message,
         sender_name,
         sender_email,

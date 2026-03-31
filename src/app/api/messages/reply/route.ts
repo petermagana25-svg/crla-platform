@@ -142,7 +142,6 @@ export async function POST(request: Request) {
       .insert({
         agent_id: auth.userId,
         archived: conversation.latestMessage.archived,
-        content: replyText,
         conversation_id: conversation.conversationId,
         listing_id: conversation.latestMessage.listing_id,
         message: replyText,
@@ -152,7 +151,7 @@ export async function POST(request: Request) {
         status: "read",
       })
       .select(
-        "id, conversation_id, created_at, listing_id, content, message, sender_email, sender_name, sender_type, status, archived"
+        "id, conversation_id, created_at, listing_id, message, sender_email, sender_name, sender_type, status, archived"
       )
       .maybeSingle();
 

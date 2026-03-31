@@ -4,14 +4,10 @@ add column if not exists conversation_id text;
 alter table public.messages
 add column if not exists sender_type text;
 
-alter table public.messages
-add column if not exists content text;
-
 update public.messages
 set
   conversation_id = coalesce(conversation_id, id::text),
   sender_type = coalesce(sender_type, 'client'),
-  content = coalesce(content, message),
   status = case
     when status = 'new' then 'unread'
     when status in ('unread', 'read', 'replied') then status
@@ -23,9 +19,6 @@ alter column conversation_id set not null;
 
 alter table public.messages
 alter column sender_type set not null;
-
-alter table public.messages
-alter column content set not null;
 
 alter table public.messages
 alter column status set default 'unread';

@@ -20,7 +20,6 @@ type SenderType = "agent" | "client";
 
 type MessageRow = {
   archived: boolean;
-  content: string | null;
   conversation_id: string;
   created_at: string;
   id: string;
@@ -95,7 +94,7 @@ function buildParticipantLabel(message: ThreadMessage | null) {
 }
 
 function getMessageBody(message: MessageRow) {
-  return message.content?.trim() || message.message?.trim() || "";
+  return message.message?.trim() || "";
 }
 
 function deriveConversationStatus(messages: ThreadMessage[]): MessageStatus {
@@ -248,7 +247,7 @@ export default function InboxPage() {
       const { data: messageData, error: messagesError } = await supabase
         .from("messages")
         .select(
-          "id, conversation_id, listing_id, content, message, sender_name, sender_email, sender_type, status, created_at, archived"
+          "id, conversation_id, listing_id, message, sender_name, sender_email, sender_type, status, created_at, archived"
         )
         .eq("agent_id", user.id)
         .eq("archived", view === "archived")
