@@ -126,24 +126,31 @@ export async function POST(req: Request) {
       return okResponse();
     }
 
-    const { data: existingConversation, error: conversationLookupError } =
-      await supabaseAdmin
-        .from("messages")
-        .select("agent_id, listing_id")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    console.log("🧵 THREAD LOOKUP conversationId:", conversationId);
 
-    if (conversationLookupError) {
-      console.error("Inbound conversation lookup error:", conversationLookupError);
+    const { data: threadSeed, error: threadSeedError } = await supabaseAdmin
+      .from("messages")
+      .select("agent_id, listing_id, conversation_id")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    console.log("🧵 THREAD LOOKUP RESULT:", threadSeed);
+    console.log("🧵 THREAD LOOKUP ERROR:", threadSeedError);
+
+    if (threadSeedError) {
+      console.error("Inbound conversation lookup error:", threadSeedError);
       return okResponse();
     }
 
-    if (!existingConversation) {
-      console.log("⚠️ NO CONVERSATION FOUND");
+    if (!threadSeed) {
+      console.log("⚠️ NO THREAD SEED FOUND FOR CONVERSATION:", conversationId);
       return okResponse();
     }
+
+    const agentId = threadSeed.agent_id ?? null;
+    const listingId = threadSeed.listing_id ?? null;
 
     const { data: matchingAgent, error: matchingAgentError } = await supabaseAdmin
       .from("agents")
@@ -159,16 +166,25 @@ export async function POST(req: Request) {
     const senderType = matchingAgent ? "agent" : "client";
 
     try {
+      console.log("📥 INSERT PAYLOAD:", {
+        agent_id: agentId,
+        listing_id: listingId,
+        sender_email: senderEmail,
+        conversation_id: conversationId,
+        sender_type: senderType,
+        message: text || "(no content)",
+      });
+
       const { data: insertResult, error } = await supabaseAdmin
         .from("messages")
         .insert({
-          agent_id: existingConversation.agent_id,
+          agent_id: agentId,
           conversation_id: conversationId,
           created_at: new Date().toISOString(),
-          listing_id: existingConversation.listing_id,
-          message: text,
+          listing_id: listingId,
+          message: text || "(no content)",
           sender_email: senderEmail,
-          sender_name: senderName,
+          sender_name: senderEmail,
           sender_type: senderType,
           status: "unread",
         })
