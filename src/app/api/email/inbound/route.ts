@@ -42,18 +42,104 @@ function extractSenderName(value: unknown) {
   return name ? name.replace(/^["']|["']$/g, "") : null;
 }
 
+function stripHtml(value: string) {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<li>/gi, "• ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripQuotedReply(value: string) {
+  const markers = [
+    "\nOn ",
+    "\nFrom:",
+    "\nSent:",
+    "\n-----Original Message-----",
+    "\n________________________________",
+  ];
+
+  let result = value;
+
+  for (const marker of markers) {
+    const index = result.indexOf(marker);
+    if (index > 0) {
+      result = result.slice(0, index).trim();
+    }
+  }
+
+  return result.trim();
+}
+
+function extractMessageContent(payload: Record<string, unknown>) {
+  const text =
+    typeof payload.text === "string" && payload.text.trim()
+      ? payload.text.trim()
+      : "";
+
+  const html =
+    typeof payload.html === "string" && payload.html.trim()
+      ? payload.html.trim()
+      : "";
+
+  const snippet =
+    typeof payload.snippet === "string" && payload.snippet.trim()
+      ? payload.snippet.trim()
+      : "";
+
+  const raw =
+    typeof payload.raw === "string" && payload.raw.trim()
+      ? payload.raw.trim()
+      : "";
+
+  if (text) {
+    return stripQuotedReply(text);
+  }
+
+  if (html) {
+    return stripQuotedReply(stripHtml(html));
+  }
+
+  if (snippet) {
+    return stripQuotedReply(snippet);
+  }
+
+  if (raw) {
+    const rawBodyMatch = raw.match(/\r\n\r\n([\s\S]*)$/);
+    const rawBody = rawBodyMatch?.[1]?.trim() ?? "";
+    if (rawBody) {
+      return stripQuotedReply(stripHtml(rawBody));
+    }
+  }
+
+  return "";
+}
+
 export async function POST(req: Request) {
   console.log("🔥 WEBHOOK RECEIVED RAW");
 
   try {
     const rawBody = await req.text();
 
-    let body: Record<string, unknown> | null;
+    let body: Record<string, unknown> | null = null;
 
     try {
-      body = (rawBody ? JSON.parse(rawBody) : null) as Record<string, unknown> | null;
-    } catch (e) {
-      console.error("❌ JSON PARSE ERROR", e);
+      body = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null;
+    } catch (error) {
+      console.error("❌ JSON PARSE ERROR:", error);
       return okResponse();
     }
 
@@ -62,72 +148,54 @@ export async function POST(req: Request) {
     const eventType =
       (typeof body?.type === "string" ? body.type : null) ??
       (typeof body?.event === "string" ? body.event : null);
-    const payload =
-      typeof body?.data === "object" && body.data !== null
-        ? (body.data as Record<string, unknown>)
-        : body;
 
     if (eventType && eventType !== "email.received") {
+      console.log("ℹ️ IGNORING NON-EMAIL-RECEIVED EVENT:", eventType);
       return okResponse();
     }
 
-    const subject = typeof body?.data === "object" &&
-      body.data !== null &&
-      "subject" in body.data &&
-      typeof body.data.subject === "string"
-      ? body.data.subject
-      : "";
-    const raw =
-      typeof body?.data === "object" &&
-      body.data !== null &&
-      "raw" in body.data &&
-      typeof body.data.raw === "string"
-        ? body.data.raw
-        : "";
-    console.log("📦 RAW EMAIL:", raw);
+    const payload =
+      typeof body?.data === "object" && body.data !== null
+        ? (body.data as Record<string, unknown>)
+        : {};
 
-    const matchBody = raw.match(/\r\n\r\n([\s\S]*)$/);
-    const extracted = matchBody ? matchBody[1].trim() : "";
-    const cleanText = extracted
-      .replace(/<[^>]+>/g, "")
-      .replace(/\r\n/g, "\n")
-      .trim();
-    const message = cleanText || "(no content)";
-    const fromEmail =
-      typeof body?.data === "object" &&
-      body.data !== null &&
-      "from" in body.data
-        ? body.data.from
-        : "";
-    const senderEmail = typeof fromEmail === "string"
-      ? fromEmail
-      : typeof fromEmail === "object" &&
-          fromEmail !== null &&
-          "email" in fromEmail &&
-          typeof fromEmail.email === "string"
-        ? fromEmail.email
-        : "";
-    const senderName = extractSenderName(payload?.from) ?? extractSenderName(body?.from);
+    const subject =
+      typeof payload.subject === "string" ? payload.subject.trim() : "";
+
+    const senderEmail = extractEmailAddress(payload.from);
+    const senderName = extractSenderName(payload.from) ?? senderEmail ?? "";
+
+    const extractedMessage = extractMessageContent(payload);
 
     console.log("📩 FROM:", senderEmail);
     console.log("📌 SUBJECT:", subject);
-    console.log("📩 EXTRACTED MESSAGE:", message);
+    console.log("📩 EXTRACTED MESSAGE:", extractedMessage || "(empty)");
 
-    const match = subject.match(/\(#([a-f0-9\-]+)\)/i);
+    const match = subject.match(/\(#([a-f0-9\-]{36})\)/i);
     const conversationId = match ? match[1] : null;
 
     console.log("📌 PARSED CONVERSATION ID:", conversationId);
 
     if (!senderEmail) {
-      console.log("⚠️ Missing sender, skipping");
+      console.log("⚠️ Missing sender email, skipping insert");
+      return okResponse();
+    }
+
+    if (!conversationId) {
+      console.log("⚠️ Missing conversation ID in subject, skipping insert");
+      return okResponse();
+    }
+
+    // Platform-first rule:
+    // if there is no usable body content, do NOT create a fake "(no content)" message.
+    if (!extractedMessage) {
+      console.log(
+        "⚠️ No usable message body found in inbound email. Skipping insert to avoid polluting thread."
+      );
       return okResponse();
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
-    if (!conversationId) {
-      console.log("⚠️ NO CONVERSATION ID");
-      return okResponse();
-    }
 
     console.log("🧵 THREAD LOOKUP conversationId:", conversationId);
 
@@ -143,12 +211,12 @@ export async function POST(req: Request) {
     console.log("🧵 THREAD LOOKUP ERROR:", threadSeedError);
 
     if (threadSeedError) {
-      console.error("Inbound conversation lookup error:", threadSeedError);
+      console.error("❌ THREAD LOOKUP ERROR:", threadSeedError);
       return okResponse();
     }
 
     if (!threadSeed) {
-      console.log("⚠️ NO THREAD SEED FOUND FOR CONVERSATION:", conversationId);
+      console.log("⚠️ No thread seed found for conversation:", conversationId);
       return okResponse();
     }
 
@@ -162,46 +230,41 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (matchingAgentError) {
-      console.error("Agent sender lookup error:", matchingAgentError);
+      console.error("❌ AGENT LOOKUP ERROR:", matchingAgentError);
       return okResponse();
     }
 
     const senderType = matchingAgent ? "agent" : "client";
 
     try {
-      console.log("📥 INSERT PAYLOAD:", {
+      const insertPayload = {
         agent_id: agentId,
         listing_id: listingId,
+        sender_name: senderName || senderEmail,
         sender_email: senderEmail,
+        message: extractedMessage,
+        status: "unread",
+        created_at: new Date().toISOString(),
         conversation_id: conversationId,
         sender_type: senderType,
-        message,
-      });
+      };
 
-      const { data: insertResult, error } = await supabaseAdmin
+      console.log("📥 INSERT PAYLOAD:", insertPayload);
+
+      const { data: insertResult, error: insertError } = await supabaseAdmin
         .from("messages")
-        .insert({
-          agent_id: agentId,
-          conversation_id: conversationId,
-          created_at: new Date().toISOString(),
-          listing_id: listingId,
-          message,
-          sender_email: senderEmail,
-          sender_name: senderEmail,
-          sender_type: senderType,
-          status: "unread",
-        })
+        .insert(insertPayload)
         .select();
 
-      if (error) {
-        console.error("❌ INSERT ERROR:", error);
-      } else {
-        console.log("✅ INSERT SUCCESS");
+      if (insertError) {
+        console.error("❌ INSERT ERROR:", insertError);
+        return okResponse();
       }
 
+      console.log("✅ INSERT SUCCESS");
       console.log("✅ INSERT RESULT:", insertResult);
-    } catch (err) {
-      console.error("❌ INSERT CRASH:", err);
+    } catch (error) {
+      console.error("❌ INSERT CRASH:", error);
     }
 
     return okResponse();

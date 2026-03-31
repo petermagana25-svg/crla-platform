@@ -387,9 +387,6 @@ CRLA Team`;
           subject: 'Welcome to CRLA — Your Agent Access is Ready',
           html: approvalEmailHtml,
           text: approvalEmailText,
-          agentEmail: approvingAdmin?.email,
-          agentName: approvingAdmin?.full_name,
-          agentPhone: approvingAdmin?.phone_number,
         });
 
         console.log('Approval email sent to:', email);
