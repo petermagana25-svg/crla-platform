@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { refreshAgentActivationStatus } from '@/lib/agent-activation';
+import { sendEmail } from '@/lib/email';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { apiError, getUserByEmail, requireAdmin } from '../_utils';
 
@@ -310,56 +310,69 @@ export async function POST(request: Request) {
       }
 
       applicationMarkedApproved = true;
-
-      const resendApiKey = process.env.RESEND_API_KEY;
-
-      if (!resendApiKey) {
-        throw new Error('Missing RESEND_API_KEY configuration.');
-      }
-
-      const resend = new Resend(resendApiKey);
       const loginUrl = `${redirectBaseUrl}/login`;
+      const approvalEmailHtml = `
+        <p>Hi ${fullName},</p>
+
+        <p>Welcome to CRLA — Certified Renovation Listing Agent.</p>
+
+        <p>Your account has been approved. You can now access your agent dashboard using the link below:</p>
+
+        <p>
+          <a href="${loginUrl}">
+            Access Your Agent Portal
+          </a>
+        </p>
+
+        <p>If this is your first time signing in, complete your account setup here:</p>
+
+        <p>
+          <a href="${activationLink}">
+            Set Your Password
+          </a>
+        </p>
+
+        <p>To become a fully certified and listed agent, please complete the following steps:</p>
+
+        <ol>
+          <li>Complete your profile</li>
+          <li>Finish your certification training</li>
+          <li>Activate your membership</li>
+        </ol>
+
+        <p>Once completed, your profile will be visible to homeowners and buyers on the platform.</p>
+
+        <p>We’re excited to have you on board.</p>
+
+        <p>— CRLA Team</p>
+      `;
+      const approvalEmailText = `Hi ${fullName},
+
+Welcome to CRLA — Certified Renovation Listing Agent.
+
+Your account has been approved. You can now access your agent dashboard here:
+${loginUrl}
+
+If this is your first time signing in, complete your account setup here:
+${activationLink}
+
+To become a fully certified and listed agent, please complete the following steps:
+1. Complete your profile
+2. Finish your certification training
+3. Activate your membership
+
+Once completed, your profile will be visible to homeowners and buyers on the platform.
+
+We’re excited to have you on board.
+
+CRLA Team`;
 
       try {
-        await resend.emails.send({
-          from: 'CRLA <onboarding@resend.dev>',
+        await sendEmail({
           to: email,
           subject: 'Welcome to CRLA — Your Agent Access is Ready',
-          html: `
-            <p>Hi ${fullName},</p>
-
-            <p>Welcome to CRLA — Certified Renovation Listing Agent.</p>
-
-            <p>Your account has been approved. You can now access your agent dashboard using the link below:</p>
-
-            <p>
-              <a href="${loginUrl}">
-                Access Your Agent Portal
-              </a>
-            </p>
-
-            <p>If this is your first time signing in, complete your account setup here:</p>
-
-            <p>
-              <a href="${activationLink}">
-                Set Your Password
-              </a>
-            </p>
-
-            <p>To become a fully certified and listed agent, please complete the following steps:</p>
-
-            <ol>
-              <li>Complete your profile</li>
-              <li>Finish your certification training</li>
-              <li>Activate your membership</li>
-            </ol>
-
-            <p>Once completed, your profile will be visible to homeowners and buyers on the platform.</p>
-
-            <p>We’re excited to have you on board.</p>
-
-            <p>— CRLA Team</p>
-          `,
+          html: approvalEmailHtml,
+          text: approvalEmailText,
         });
 
         console.log('Approval email sent to:', email);

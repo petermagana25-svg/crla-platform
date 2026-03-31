@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 
 type Body = {
   message_id?: string;
@@ -62,14 +62,8 @@ export async function POST(request: Request) {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const resendApiKey = process.env.RESEND_API_KEY;
-
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("Missing Supabase admin configuration.");
-    }
-
-    if (!resendApiKey) {
-      throw new Error("Missing RESEND_API_KEY.");
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
@@ -79,22 +73,16 @@ export async function POST(request: Request) {
       },
     });
 
-    const resend = new Resend(resendApiKey);
-
-    const { error: sendError } = await resend.emails.send({
-      from: "CRLA <martin@mindrasolutions.com>",
-      to: [senderEmail],
+    await sendEmail({
+      to: senderEmail,
       subject: "Response to your inquiry",
       html: `
         <p>${escapeHtml(replyText).replace(/\n/g, "<br/>")}</p>
         <br/>
         <p>Best regards,<br/>CRLA Agent</p>
       `,
+      text: `${replyText}\n\nBest regards,\nCRLA Agent`,
     });
-
-    if (sendError) {
-      throw new Error(sendError.message || "Unable to send reply email.");
-    }
 
     const { error: updateError } = await supabaseAdmin
       .from("messages")

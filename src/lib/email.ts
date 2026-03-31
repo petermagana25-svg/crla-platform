@@ -2,11 +2,13 @@ import 'server-only';
 
 import { Resend } from 'resend';
 
+export const EMAIL_FROM = 'CRLA <noreply@send.crladirectory.com>';
+
 type SendEmailArgs = {
   to: string;
   subject: string;
   html: string;
-  text: string;
+  text?: string;
 };
 
 function readResendErrorMessage(payload: unknown) {
@@ -35,22 +37,23 @@ function readResendErrorMessage(payload: unknown) {
 }
 
 export async function sendEmail({ to, subject, html, text }: SendEmailArgs) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-
-  if (!apiKey || !from) {
-    throw new Error(
-      'Missing email configuration. Set RESEND_API_KEY and RESEND_FROM_EMAIL.'
-    );
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('Missing RESEND_API_KEY');
   }
 
-  const resend = new Resend(apiKey);
+  if (!EMAIL_FROM.includes('crladirectory.com')) {
+    throw new Error('Invalid sending domain');
+  }
+
+  console.log('Sending email from:', EMAIL_FROM);
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const { data, error } = await resend.emails.send({
-    from,
+    from: EMAIL_FROM,
     to: [to],
     subject,
     html,
-    text,
+    ...(text ? { text } : {}),
   });
 
   if (error) {
