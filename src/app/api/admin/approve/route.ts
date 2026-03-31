@@ -85,6 +85,23 @@ export async function POST(request: Request) {
         );
       }
 
+      const { data: existingAgentByEmail, error: existingAgentByEmailError } =
+        await admin
+          .from('agents')
+          .select(
+            'id, role, is_active, certification_status, profile_completed, agent_status'
+          )
+          .eq('email', email)
+          .maybeSingle();
+
+      if (existingAgentByEmailError) {
+        return apiError(
+          'agent_lookup_failed',
+          existingAgentByEmailError.message || 'Failed to load agent record.',
+          500
+        );
+      }
+
       const redirectBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
 
       if (!redirectBaseUrl) {
@@ -198,25 +215,6 @@ export async function POST(request: Request) {
         );
       }
 
-      const { data: existingAgentByEmail, error: existingAgentByEmailError } =
-        await admin
-          .from('agents')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-
-      if (existingAgentByEmailError) {
-        if (createdUserId) {
-          await admin.auth.admin.deleteUser(createdUserId);
-        }
-
-        return apiError(
-          'agent_lookup_failed',
-          existingAgentByEmailError.message || 'Failed to load agent record.',
-          500
-        );
-      }
-
       if (existingAgentByEmail && existingAgentByEmail.id !== approvedUserId) {
         if (createdUserId) {
           await admin.auth.admin.deleteUser(createdUserId);
@@ -229,20 +227,30 @@ export async function POST(request: Request) {
         );
       }
 
+      const existingAgent = existingAgentByEmail ?? existingAgentById;
+      const roleBeforeUpsert = existingAgent?.role ?? null;
+      const role =
+        roleBeforeUpsert === 'admin' ? 'admin' : roleBeforeUpsert ?? 'agent';
+
+      console.log('ROLE BEFORE UPSERT:', roleBeforeUpsert);
+      console.log('ROLE AFTER:', role);
+
       const { error: agentInsertError } = await admin
         .from('agents')
         .upsert(
           {
             id: approvedUserId,
-            agent_status: existingAgentById?.agent_status ?? 'pending',
+            agent_status: existingAgent?.agent_status ?? 'pending',
             full_name: fullName,
             email,
             license_number: licenseNumber,
-            role: existingAgentById?.role ?? 'agent',
-            is_active: existingAgentById?.is_active ?? true,
+            // Preserve any existing role, especially admin, and only default to
+            // agent when no role exists yet.
+            role,
+            is_active: existingAgent?.is_active ?? true,
             certification_status:
-              existingAgentById?.certification_status ?? 'not_started',
-            profile_completed: existingAgentById?.profile_completed ?? false,
+              existingAgent?.certification_status ?? 'not_started',
+            profile_completed: existingAgent?.profile_completed ?? false,
           },
           { onConflict: 'id' }
         );
@@ -253,7 +261,7 @@ export async function POST(request: Request) {
         );
       }
 
-      insertedAgentRow = !existingAgentById;
+      insertedAgentRow = !existingAgent;
 
       const { data: existingMembership, error: membershipLookupError } =
         await admin
