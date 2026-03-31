@@ -121,56 +121,8 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
-
     if (!conversationId) {
-      console.log("⚠️ NO CONVERSATION ID — FALLBACK INSERT");
-
-      const { data: fallbackTarget, error: fallbackLookupError } =
-        await supabaseAdmin
-          .from("messages")
-          .select("agent_id, listing_id")
-          .eq("sender_email", senderEmail)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-      if (fallbackLookupError) {
-        console.error("Fallback lookup error:", fallbackLookupError);
-        return okResponse();
-      }
-
-      if (!fallbackTarget) {
-        console.log("⚠️ NO FALLBACK TARGET FOUND");
-        return okResponse();
-      }
-
-      try {
-        const { data: insertResult, error } = await supabaseAdmin
-          .from("messages")
-          .insert({
-            agent_id: fallbackTarget.agent_id,
-            conversation_id: null,
-            created_at: new Date().toISOString(),
-            listing_id: fallbackTarget.listing_id,
-            message: text,
-            sender_email: senderEmail,
-            sender_name: senderName,
-            sender_type: "client",
-            status: "unread",
-          })
-          .select();
-
-        if (error) {
-          console.error("❌ INSERT ERROR:", error);
-        } else {
-          console.log("✅ INSERT SUCCESS");
-        }
-
-        console.log("✅ INSERT RESULT:", insertResult);
-      } catch (err) {
-        console.error("❌ INSERT CRASH:", err);
-      }
-
+      console.log("⚠️ NO CONVERSATION ID");
       return okResponse();
     }
 
@@ -193,6 +145,19 @@ export async function POST(req: Request) {
       return okResponse();
     }
 
+    const { data: matchingAgent, error: matchingAgentError } = await supabaseAdmin
+      .from("agents")
+      .select("id")
+      .eq("email", senderEmail)
+      .maybeSingle();
+
+    if (matchingAgentError) {
+      console.error("Agent sender lookup error:", matchingAgentError);
+      return okResponse();
+    }
+
+    const senderType = matchingAgent ? "agent" : "client";
+
     try {
       const { data: insertResult, error } = await supabaseAdmin
         .from("messages")
@@ -204,7 +169,7 @@ export async function POST(req: Request) {
           message: text,
           sender_email: senderEmail,
           sender_name: senderName,
-          sender_type: "client",
+          sender_type: senderType,
           status: "unread",
         })
         .select();
