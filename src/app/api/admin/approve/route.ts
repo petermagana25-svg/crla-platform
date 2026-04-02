@@ -36,19 +36,6 @@ export async function POST(request: Request) {
     }
 
     const admin = createSupabaseAdminClient();
-    const { data: approvingAdmin, error: approvingAdminError } = await admin
-      .from('agents')
-      .select('email, full_name, phone_number')
-      .eq('id', adminCheck.userId)
-      .maybeSingle();
-
-    if (approvingAdminError) {
-      return apiError(
-        'admin_lookup_failed',
-        approvingAdminError.message || 'Unable to load admin identity.',
-        500
-      );
-    }
 
     let createdUserId: string | null = null;
     let approvedUserId: string | null = null;
@@ -103,7 +90,7 @@ export async function POST(request: Request) {
         await admin
           .from('agents')
           .select(
-            'id, role, is_active, certification_status, profile_completed, agent_status'
+            'id, role, is_active, certification_status, profile_completed, agent_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
           )
           .eq('email', email)
           .maybeSingle();
@@ -212,7 +199,7 @@ export async function POST(request: Request) {
       const { data: existingAgentById, error: existingAgentError } = await admin
         .from('agents')
         .select(
-          'id, role, is_active, certification_status, profile_completed, agent_status'
+          'id, role, is_active, certification_status, profile_completed, agent_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
         )
         .eq('id', approvedUserId)
         .maybeSingle();
@@ -245,9 +232,17 @@ export async function POST(request: Request) {
       const roleBeforeUpsert = existingAgent?.role ?? null;
       const role =
         roleBeforeUpsert === 'admin' ? 'admin' : roleBeforeUpsert ?? 'agent';
+      const isAdminAgent = role === 'admin';
 
       console.log('ROLE BEFORE UPSERT:', roleBeforeUpsert);
       console.log('ROLE AFTER:', role);
+      console.info('[admin-approve] applying initial agent state', {
+        approvedUserId,
+        email,
+        isActive: isAdminAgent ? existingAgent?.is_active ?? true : false,
+        admin_override_active:
+          isAdminAgent ? existingAgent?.admin_override_active ?? null : null,
+      });
 
       const { error: agentInsertError } = await admin
         .from('agents')
@@ -261,10 +256,24 @@ export async function POST(request: Request) {
             // Preserve any existing role, especially admin, and only default to
             // agent when no role exists yet.
             role,
-            is_active: existingAgent?.is_active ?? true,
+            is_active: isAdminAgent ? existingAgent?.is_active ?? true : false,
             certification_status:
               existingAgent?.certification_status ?? 'not_started',
             profile_completed: existingAgent?.profile_completed ?? false,
+            admin_override_active:
+              isAdminAgent ? existingAgent?.admin_override_active ?? null : null,
+            admin_override_profile_complete:
+              isAdminAgent
+                ? existingAgent?.admin_override_profile_complete ?? null
+                : null,
+            admin_override_training_complete:
+              isAdminAgent
+                ? existingAgent?.admin_override_training_complete ?? null
+                : null,
+            admin_override_membership_active:
+              isAdminAgent
+                ? existingAgent?.admin_override_membership_active ?? null
+                : null,
           },
           { onConflict: 'id' }
         );
@@ -277,38 +286,11 @@ export async function POST(request: Request) {
 
       insertedAgentRow = !existingAgent;
 
-      const { data: existingMembership, error: membershipLookupError } =
-        await admin
-          .from('memberships')
-          .select('id')
-          .eq('agent_id', approvedUserId)
-          .maybeSingle();
-
-      if (membershipLookupError) {
-        throw new Error(
-          membershipLookupError.message ||
-            'Failed to verify membership setup.'
-        );
-      }
-
-      if (!existingMembership) {
-        const { error: membershipInsertError } = await admin
-          .from('memberships')
-          .insert({
-            agent_id: approvedUserId,
-            amount: 1000,
-            currency: 'USD',
-            plan_name: 'CRLA Annual Membership',
-            renewal_period: 'annual',
-            status: 'pending',
-          });
-
-        if (membershipInsertError) {
-          throw new Error(
-            membershipInsertError.message || 'Failed to create membership.'
-          );
-        }
-      }
+      console.info('[admin-approve] skipping membership bootstrap', {
+        approvedUserId,
+        reason:
+          'Newly approved agents should remain membership-inactive until they activate membership.',
+      });
 
       await refreshAgentActivationStatus(approvedUserId, admin);
 

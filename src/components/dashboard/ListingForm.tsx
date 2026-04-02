@@ -6,10 +6,26 @@ import { useRouter } from "next/navigation";
 import BackToListingsButton from "@/components/dashboard/BackToListingsButton";
 import Container from "@/components/layout/Container";
 import Navbar from "@/components/layout/Navbar";
+import { computeAgentStatus } from "@/lib/agent-status";
+import { selectPreferredMembership } from "@/lib/membership";
 import { supabase } from "@/lib/supabase";
 
 type AgentAccess = {
-  agent_status: string | null;
+  admin_override_active: boolean | null;
+  admin_override_membership_active: boolean | null;
+  admin_override_profile_complete: boolean | null;
+  admin_override_training_complete: boolean | null;
+  certification_status: "not_started" | "in_progress" | "completed" | "certified" | null;
+  is_active: boolean | null;
+  profile_completed: boolean | null;
+};
+
+type MembershipRow = {
+  created_at: string | null;
+  expires_at: string | null;
+  id: string;
+  starts_at: string | null;
+  status: "active" | "expired" | "pending" | "cancelled" | null;
 };
 
 export type ListingFormInitialData = {
@@ -92,18 +108,46 @@ export default function ListingForm({
         return;
       }
 
-      const { data: agentData } = await supabase
-        .from("agents")
-        .select("agent_status")
-        .eq("id", user.id)
-        .maybeSingle();
+      const [{ data: agentData }, { data: membershipData }] = await Promise.all([
+        supabase
+          .from("agents")
+          .select(
+            "is_active, profile_completed, certification_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active"
+          )
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("memberships")
+          .select("id, status, starts_at, expires_at, created_at")
+          .eq("agent_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (!isMounted) {
         return;
       }
 
+      const preferredMembership = selectPreferredMembership(
+        ((membershipData ?? []) as MembershipRow[]).map((membership) => ({
+          amount: null,
+          created_at: membership.created_at,
+          currency: null,
+          expires_at: membership.expires_at,
+          id: membership.id,
+          plan_name: null,
+          renewal_period: null,
+          starts_at: membership.starts_at,
+          status: membership.status,
+        }))
+      );
+
       setIsActiveAgent(
-        (agentData as AgentAccess | null)?.agent_status === "active"
+        agentData
+          ? computeAgentStatus({
+              ...(agentData as AgentAccess),
+              membership_status: preferredMembership?.status ?? "pending",
+            }).finalActive
+          : false
       );
       setIsLoadingAccess(false);
     }

@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import Container from "@/components/layout/Container";
 import Navbar from "@/components/layout/Navbar";
 import OffMarketListingsClient, {
@@ -5,7 +6,10 @@ import OffMarketListingsClient, {
 } from "@/components/public/OffMarketListingsClient";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
+export const dynamic = "force-dynamic";
+
 async function fetchOffMarketListings() {
+  noStore();
   const supabase = await createServerSupabaseClient();
 
   const { data: listings, error } = await supabase
@@ -22,6 +26,7 @@ async function fetchOffMarketListings() {
 }
 
 export default async function OffMarketPage() {
+  noStore();
   const listings = await fetchOffMarketListings();
 
   return (

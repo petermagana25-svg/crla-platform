@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Home, MapPin } from "lucide-react";
@@ -6,6 +7,8 @@ import Navbar from "@/components/layout/Navbar";
 import LeadMessageButton from "@/components/public/LeadMessageButton";
 import ListingViewTracker from "@/components/public/ListingViewTracker";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+
+export const dynamic = "force-dynamic";
 
 type ListingDetail = {
   address: string;
@@ -60,6 +63,7 @@ function formatDate(value: string | null) {
 }
 
 async function fetchOffMarketListing(id: string) {
+  noStore();
   const supabase = await createServerSupabaseClient();
 
   const joinedQuery = await supabase
@@ -107,6 +111,7 @@ export default async function OffMarketListingDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  noStore();
   const { id } = await params;
   const listing = await fetchOffMarketListing(id);
 

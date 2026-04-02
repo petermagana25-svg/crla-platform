@@ -31,6 +31,7 @@ import {
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 import { getCurrentUserRoleClient } from "@/lib/get-current-user-role-client";
+import { computeAgentStatus } from "@/lib/agent-status";
 import {
   formatMembershipCurrency,
   formatMembershipDate,
@@ -52,9 +53,18 @@ type Profile = {
 };
 
 type AgentAccess = {
+  admin_override_active: boolean | null;
+  admin_override_membership_active: boolean | null;
+  admin_override_profile_complete: boolean | null;
+  admin_override_training_complete: boolean | null;
   agent_status: string | null;
   city: string | null;
-  certification_status: string | null;
+  certification_status:
+    | "not_started"
+    | "in_progress"
+    | "completed"
+    | "certified"
+    | null;
   full_name: string | null;
   is_active: boolean | null;
   license_number: string | null;
@@ -426,14 +436,10 @@ function formatAgentLocation(city: string | null, state: string | null) {
   return "Location not set";
 }
 
-function getCertificationStatusLabel(status: string | null) {
-  switch (status) {
-    case "active":
+function getCertificationStatusLabel(isActive: boolean) {
+  switch (isActive) {
+    case true:
       return "Verified & Active";
-    case "in_progress":
-      return "In Progress";
-    case "pending":
-      return "Pending Activation";
     default:
       return "Pending Activation";
   }
@@ -554,7 +560,7 @@ export default function AgentDashboardPage() {
         supabase
           .from("agents")
           .select(
-            "agent_status, city, certification_status, full_name, is_active, license_number, profile_completed, role, state"
+            "agent_status, city, certification_status, full_name, is_active, license_number, profile_completed, role, state, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active"
           )
           .eq("id", user.id)
           .maybeSingle(),
@@ -615,10 +621,19 @@ export default function AgentDashboardPage() {
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
     const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
     const admin = role === "admin";
+    const preferredMembership = membershipsError
+      ? null
+      : selectPreferredMembership(membershipsData ?? []);
+    const computedAgentStatus = agentAccess
+      ? computeAgentStatus({
+          ...agentAccess,
+          membership_status: preferredMembership?.status ?? "pending",
+        })
+      : null;
     setAgentAccess(agentAccess);
     setIsAdmin(admin);
 
-    if (!admin && !agentAccess?.profile_completed) {
+    if (!admin && !computedAgentStatus?.profileComplete) {
       router.push("/onboarding/profile");
       return;
     }
@@ -633,9 +648,7 @@ export default function AgentDashboardPage() {
     setAcademyResources(
       academyResourcesError ? [] : academyResourceData ?? []
     );
-    setMembership(
-      membershipsError ? null : selectPreferredMembership(membershipsData ?? [])
-    );
+    setMembership(preferredMembership);
     setListings(listingsError ? [] : ((listingData ?? []) as Listing[]));
     setProfileViewCount(profileViewsError ? 0 : profileViewsCount ?? 0);
     setListingViewCount(listingViewsError ? 0 : listingViewsCount ?? 0);
@@ -682,17 +695,23 @@ export default function AgentDashboardPage() {
   const latestMarketingAssets = marketingAssets.slice(0, 3);
   const membershipDaysRemaining = getDaysRemaining(membership?.expires_at ?? null);
   const membershipStatus = (membership?.status ?? "pending") as MembershipStatus;
-  const profileStepStatus: ActivationStepStatus = agentAccess?.profile_completed
+  const computedAgentStatus = agentAccess
+    ? computeAgentStatus({
+        ...agentAccess,
+        membership_status: membershipStatus,
+      })
+    : null;
+  const profileStepStatus: ActivationStepStatus = computedAgentStatus?.profileComplete
     ? "completed"
     : "pending";
   const certificationStepStatus: ActivationStepStatus =
-    agentAccess?.certification_status === "completed"
+    computedAgentStatus?.trainingComplete
       ? "completed"
       : agentAccess?.certification_status === "in_progress"
         ? "in_progress"
         : "pending";
   const membershipStepStatus: ActivationStepStatus =
-    membershipStatus === "active"
+    computedAgentStatus?.membershipComplete
       ? "completed"
       : membership
         ? "in_progress"
@@ -702,12 +721,12 @@ export default function AgentDashboardPage() {
     certificationStepStatus === "completed",
     membershipStepStatus === "completed",
   ].filter(Boolean).length;
-  const isActiveAgent = agentAccess?.agent_status === "active";
+  const isActiveAgent = computedAgentStatus?.finalActive ?? false;
   const profileName = agentAccess?.full_name?.trim() ?? "";
   const profileInitials = getProfileInitials(profileName);
   const heroHeading = profileName ? `Welcome back, ${profileName}` : "Welcome";
   const certificationStatusLabel = getCertificationStatusLabel(
-    agentAccess?.agent_status ?? null
+    isActiveAgent
   );
   const renewalDate = membership?.status === "active" ? membership.expires_at : null;
   const locationLabel = formatAgentLocation(
@@ -991,7 +1010,7 @@ export default function AgentDashboardPage() {
                       Become a Certified CRLA Agent
                     </h2>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
-                      {agentAccess?.agent_status === "active"
+                      {isActiveAgent
                         ? "You are now an active CRLA Agent"
                         : "Complete your activation to be listed in the CRLA directory"}
                     </p>

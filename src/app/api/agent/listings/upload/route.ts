@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { computeAgentStatus } from '@/lib/agent-status';
+import { selectPreferredMembership } from '@/lib/membership';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
@@ -29,7 +31,9 @@ export async function POST(request: Request) {
 
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('agent_status, role')
+      .select(
+        'role, is_active, profile_completed, certification_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
+      )
       .eq('id', user.id)
       .maybeSingle();
 
@@ -37,8 +41,39 @@ export async function POST(request: Request) {
       throw new Error(agentError.message || 'Unable to verify agent access.');
     }
 
+    const { data: memberships, error: membershipsError } = await supabase
+      .from('memberships')
+      .select('id, status, starts_at, expires_at, created_at')
+      .eq('agent_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (membershipsError) {
+      throw new Error(
+        membershipsError.message || 'Unable to load membership activation data.'
+      );
+    }
+
+    const preferredMembership = selectPreferredMembership(
+      (memberships ?? []).map((membership) => ({
+        amount: null,
+        created_at: membership.created_at,
+        currency: null,
+        expires_at: membership.expires_at,
+        id: membership.id,
+        plan_name: null,
+        renewal_period: null,
+        starts_at: membership.starts_at,
+        status: membership.status,
+      }))
+    );
+
     const isAdmin = agent?.role === 'admin';
-    const isActiveAgent = agent?.agent_status === 'active';
+    const isActiveAgent = agent
+      ? computeAgentStatus({
+          ...agent,
+          membership_status: preferredMembership?.status ?? 'pending',
+        }).finalActive
+      : false;
 
     if (!isAdmin && !isActiveAgent) {
       return NextResponse.json(

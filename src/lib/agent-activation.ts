@@ -1,21 +1,12 @@
 import 'server-only';
 
+import {
+  AgentCertificationStatus,
+  AgentStatus,
+  computeAgentStatus,
+} from '@/lib/agent-status';
 import { MembershipStatus, selectPreferredMembership } from '@/lib/membership';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
-
-export type AgentCertificationStatus =
-  | 'not_started'
-  | 'in_progress'
-  | 'completed'
-  | null;
-
-export type AgentStatus = 'pending' | 'in_progress' | 'active';
-
-type ActivationInputs = {
-  certificationStatus: AgentCertificationStatus;
-  membershipStatus: MembershipStatus;
-  profileCompleted: boolean;
-};
 
 type RefreshResult = {
   agentStatus: AgentStatus;
@@ -25,22 +16,6 @@ type RefreshResult = {
 };
 
 type ActivationClient = ReturnType<typeof createSupabaseAdminClient>;
-
-export function computeAgentStatus({
-  certificationStatus,
-  membershipStatus,
-  profileCompleted,
-}: ActivationInputs): AgentStatus {
-  if (!profileCompleted) {
-    return 'pending';
-  }
-
-  if (certificationStatus === 'completed' && membershipStatus === 'active') {
-    return 'active';
-  }
-
-  return 'in_progress';
-}
 
 export async function refreshAgentActivationStatus(
   agentId: string,

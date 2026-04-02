@@ -1,70 +1,69 @@
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { unstable_noStore as noStore } from 'next/cache';
+import AgentRowActions from '@/components/admin/AgentRowActions';
 import {
-  Membership,
-  MembershipStatus,
-  selectPreferredMembership,
-} from '@/lib/membership';
-import { supabase } from '@/lib/supabase';
+  AdminAgent,
+  AdminAgentFilterStatus,
+} from '@/lib/admin-agents';
+import { computeAgentStatus } from '@/lib/agent-status';
+import { Membership, selectPreferredMembership } from '@/lib/membership';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 
-type CertificationStatus = 'not_started' | 'in_progress' | 'completed';
-type AgentStatus = 'pending' | 'in_progress' | 'active';
-type FilterStatus = 'all' | AgentStatus;
+export const dynamic = 'force-dynamic';
 
-type Agent = {
-  agent_status: AgentStatus | null;
-  created_at: string | null;
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  role: string | null;
-  certification_status: CertificationStatus | null;
-  is_active: boolean | null;
-  profile_completed: boolean | null;
-  payment_status: MembershipStatus;
+type AdminAgentsPageProps = {
+  searchParams?: Promise<{
+    filter?: string;
+    search?: string;
+  }>;
 };
 
-type ActiveRowState = {
-  action: 'active';
-  id: string;
-} | null;
+type MembershipRow = Membership & {
+  agent_id: string;
+};
 
-export default function AdminAgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [filter, setFilter] = useState<FilterStatus>('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeRow, setActiveRow] = useState<ActiveRowState>(null);
-  const [message, setMessage] = useState<{
-    type: 'success' | 'error';
-    text: string;
-  } | null>(null);
+function resolveFilter(value?: string): AdminAgentFilterStatus {
+  if (value === 'active' || value === 'inactive') {
+    return value;
+  }
 
-  useEffect(() => {
-    fetchAgents();
-  }, []);
+  return 'all';
+}
 
-  useEffect(() => {
-    if (message?.type !== 'success') {
-      return;
-    }
+function buildAgentsHref({
+  filter,
+  search,
+}: {
+  filter: AdminAgentFilterStatus;
+  search: string;
+}) {
+  const params = new URLSearchParams();
 
-    const timeoutId = window.setTimeout(() => {
-      setMessage(null);
-    }, 1500);
+  if (filter !== 'all') {
+    params.set('filter', filter);
+  }
 
-    return () => window.clearTimeout(timeoutId);
-  }, [message]);
+  if (search) {
+    params.set('search', search);
+  }
 
-  async function fetchAgents() {
-    setIsLoading(true);
+  const query = params.toString();
+
+  return query ? `/admin/agents?${query}` : '/admin/agents';
+}
+
+async function loadAgents() {
+  try {
+    noStore();
+
+    const supabase = await createServerSupabaseClient();
 
     const [{ data, error }, { data: membershipsData, error: membershipsError }] =
       await Promise.all([
         supabase
           .from('agents')
           .select(
-            'agent_status, created_at, id, full_name, email, role, certification_status, is_active, profile_completed'
+            'admin_override_active, admin_override_membership_active, admin_override_profile_complete, admin_override_training_complete, admin_updated_at, agent_status, created_at, id, full_name, email, role, certification_status, is_active, profile_completed'
           )
           .order('created_at', { ascending: false }),
         supabase
@@ -76,273 +75,184 @@ export default function AdminAgentsPage() {
       ]);
 
     if (error) {
-      setMessage({
-        type: 'error',
-        text: error.message || 'Unable to load agents.',
-      });
-      setAgents([]);
-      setIsLoading(false);
-      return;
+      console.error('[admin/agents] Unable to load agents.', { error });
+
+      return {
+        agents: [] as AdminAgent[],
+        errorMessage: error.message || 'Unable to load agents.',
+      };
     }
 
     if (membershipsError) {
-      setMessage({
-        type: 'error',
-        text: membershipsError.message || 'Unable to load membership statuses.',
+      console.error('[admin/agents] Unable to load memberships.', {
+        membershipsError,
       });
-      setAgents([]);
-      setIsLoading(false);
-      return;
+
+      return {
+        agents: [] as AdminAgent[],
+        errorMessage:
+          membershipsError.message || 'Unable to load membership statuses.',
+      };
     }
 
-    const membershipRows =
-      ((membershipsData ?? []) as (Membership & { agent_id: string })[]) ?? [];
-    const membershipsByAgentId = membershipRows.reduce<
-      Record<string, Membership[]>
-    >((collection, membership) => {
-      collection[membership.agent_id] = [
-        ...(collection[membership.agent_id] ?? []),
-        membership,
-      ];
+    const membershipRows = (membershipsData ?? []) as MembershipRow[];
+    const membershipsByAgentId = membershipRows.reduce<Record<string, Membership[]>>(
+      (collection, membership) => {
+        collection[membership.agent_id] = [
+          ...(collection[membership.agent_id] ?? []),
+          membership,
+        ];
 
-      return collection;
-    }, {});
+        return collection;
+      },
+      {}
+    );
 
-    const mappedAgents: Agent[] = ((data ?? []) as Omit<Agent, 'payment_status'>[])
-      .map((agent) => ({
+    const agents = ((data ?? []) as Omit<AdminAgent, 'payment_status'>[]).map(
+      (agent) => ({
         ...agent,
         payment_status:
           selectPreferredMembership(membershipsByAgentId[agent.id] ?? [])?.status ??
           'pending',
-      }));
+      })
+    );
 
-    setAgents(mappedAgents);
-    setIsLoading(false);
-  }
+    agents.forEach((agent) => {
+      const computedStatus = computeAgentStatus(agent);
 
-  async function toggleActive(agent: Agent) {
-    setActiveRow({ id: agent.id, action: 'active' });
-    setMessage(null);
-
-    try {
-      const response = await fetch('/api/admin/agents/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          agentId: agent.id,
-          isActive: !agent.is_active,
-        }),
+      console.log('Computed status:', {
+        name: agent.full_name,
+        finalActive: computedStatus.finalActive,
       });
+    });
 
-      const result = (await response.json().catch(() => null)) as
-        | {
-            error?: { message?: string };
-            success?: boolean;
-          }
-        | null;
+    return {
+      agents,
+      errorMessage: null,
+    };
+  } catch (error) {
+    console.error('[admin/agents] Unexpected load failure.', { error });
 
-      if (!response.ok || !result?.success) {
-        throw new Error(result?.error?.message || 'Unable to update active status.');
-      }
-
-      await fetchAgents();
-      setMessage({
-        type: 'success',
-        text: 'Updated ✓',
-      });
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error instanceof Error
-            ? error.message
-            : 'Unable to update active status.',
-      });
-    } finally {
-      setActiveRow(null);
-    }
+    return {
+      agents: [] as AdminAgent[],
+      errorMessage:
+        error instanceof Error ? error.message : 'Unable to load agents.',
+    };
   }
+}
 
-  function getBadgeClass(value: string) {
-    if (value === 'active' || value === 'completed' || value === 'complete') {
-      return 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-200';
-    }
+export default async function AdminAgentsPage({
+  searchParams,
+}: AdminAgentsPageProps) {
+  noStore();
 
-    if (value === 'in_progress') {
-      return 'border border-yellow-400/30 bg-yellow-400/10 text-yellow-200';
-    }
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const filter = resolveFilter(resolvedSearchParams?.filter);
+  const search = resolvedSearchParams?.search?.trim() ?? '';
+  const normalizedSearch = search.toLowerCase();
+  const { agents, errorMessage } = await loadAgents();
+  const filteredBySearch = normalizedSearch
+    ? agents.filter((agent) => {
+        const fullName = agent.full_name?.toLowerCase() ?? '';
+        const email = agent.email?.toLowerCase() ?? '';
 
-    return 'border border-red-400/30 bg-red-400/10 text-red-200';
-  }
-
-  function formatLabel(value: string) {
-    return value.split('_').join(' ');
-  }
-
-  const filteredAgents = useMemo(() => {
-    if (filter === 'all') {
-      return agents;
-    }
-
-    return agents.filter((agent) => (agent.agent_status ?? 'pending') === filter);
-  }, [agents, filter]);
+        return (
+          fullName.includes(normalizedSearch) || email.includes(normalizedSearch)
+        );
+      })
+    : agents;
+  const filteredAgents =
+    filter === 'all'
+      ? filteredBySearch
+      : filteredBySearch.filter((agent) =>
+          filter === 'active'
+            ? computeAgentStatus(agent).finalActive
+            : !computeAgentStatus(agent).finalActive
+        );
 
   return (
     <section className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-white">Agents</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Manage certification progress and account activity for agents.
+          Manage certification progress, directory access, and admin overrides for
+          agents.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {(['all', 'pending', 'in_progress', 'active'] as FilterStatus[]).map(
-          (value) => {
-            const isSelected = filter === value;
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <form action="/admin/agents" className="flex w-full max-w-xl gap-3">
+          <input
+            type="text"
+            name="search"
+            defaultValue={search}
+            placeholder="Search agents..."
+            className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white transition-all duration-200 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
+          />
+          {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
+          <button
+            type="submit"
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-white/10"
+          >
+            Search
+          </button>
+        </form>
 
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  isSelected
-                    ? 'bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.25)]'
-                    : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {value === 'all' ? 'All' : formatLabel(value)}
-              </button>
-            );
-          }
-        )}
+        <div className="flex flex-wrap gap-3">
+          {(['all', 'active', 'inactive'] as AdminAgentFilterStatus[]).map(
+            (value) => {
+              const isSelected = filter === value;
+
+              return (
+                <Link
+                  key={value}
+                  href={buildAgentsHref({ filter: value, search })}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                    isSelected
+                      ? 'bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.25)]'
+                      : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {value === 'all'
+                    ? 'All'
+                    : value === 'active'
+                      ? 'Active'
+                      : 'Inactive'}
+                </Link>
+              );
+            }
+          )}
+        </div>
       </div>
 
-      {message && (
-        <div
-          className={`rounded-2xl px-4 py-3 text-sm ${
-            message.type === 'success'
-              ? 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
-              : 'border border-red-400/30 bg-red-400/10 text-red-200'
-          }`}
-        >
-          {message.text}
+      {errorMessage && (
+        <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+          {errorMessage}
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-left">
-            <thead className="bg-white/5">
-              <tr className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                <th className="px-4 py-3 font-medium">Full Name</th>
-                <th className="px-4 py-3 font-medium">Email</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Profile</th>
-                <th className="px-4 py-3 font-medium">Certification</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Agent Status</th>
-                <th className="px-4 py-3 font-medium">Directory</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10">
-              {filteredAgents.map((agent) => {
-                const isProcessing = activeRow?.id === agent.id;
-                const isUpdatingActive =
-                  isProcessing && activeRow?.action === 'active';
+      <div className="space-y-4">
+          {filteredAgents.map((agent) => (
+            <section
+              key={agent.id}
+              className="rounded-lg bg-[#0B1220] p-4 transition-all duration-200 hover:bg-white/10"
+            >
+              <div className="mb-3 rounded-md border-b border-white/10 bg-white/10 px-3 py-2">
+                <h3 className="text-base font-semibold text-white">
+                  {agent.full_name || 'Unnamed agent'}
+                </h3>
+                <p className="text-sm text-slate-400">{agent.email || '—'}</p>
+              </div>
 
-                return (
-                  <tr key={agent.id} className="text-sm text-slate-200">
-                    <td className="px-4 py-4">{agent.full_name || '—'}</td>
-                    <td className="px-4 py-4">{agent.email || '—'}</td>
-                    <td className="px-4 py-4">{agent.role || '—'}</td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getBadgeClass(
-                          agent.profile_completed ? 'complete' : 'incomplete'
-                        )}`}
-                      >
-                        {agent.profile_completed ? 'complete' : 'incomplete'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getBadgeClass(
-                          agent.certification_status ?? 'not_started'
-                        )}`}
-                      >
-                        {formatLabel(agent.certification_status ?? 'not_started')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getBadgeClass(
-                          agent.payment_status ?? 'pending'
-                        )}`}
-                      >
-                        {formatLabel(agent.payment_status ?? 'pending')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getBadgeClass(
-                          agent.agent_status ?? 'pending'
-                        )}`}
-                      >
-                        {formatLabel(agent.agent_status ?? 'pending')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-300">
-                        {agent.is_active ? 'enabled' : 'disabled'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <button
-                        type="button"
-                        onClick={() => toggleActive(agent)}
-                        disabled={isProcessing}
-                        className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isUpdatingActive
-                          ? 'Updating...'
-                          : agent.is_active
-                            ? 'Deactivate'
-                            : 'Activate'}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              <AgentRowActions agent={agent} />
+            </section>
+          ))}
 
-              {!isLoading && filteredAgents.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-8 text-center text-sm text-slate-400"
-                  >
-                    No agents found.
-                  </td>
-                </tr>
-              )}
-
-              {isLoading && (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-8 text-center text-sm text-slate-400"
-                  >
-                    Loading agents...
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+          {!errorMessage && filteredAgents.length === 0 && (
+            <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+              No agents found.
+            </div>
+          )}
       </div>
     </section>
   );

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import {
-  AgentCertificationStatus,
   refreshAgentActivationStatus,
 } from '@/lib/agent-activation';
+import { AgentCertificationStatus } from '@/lib/agent-status';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
