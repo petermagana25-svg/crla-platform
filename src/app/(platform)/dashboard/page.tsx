@@ -184,7 +184,8 @@ function SidebarItem({
   disabled = false,
   tone = "secondary",
 }: SidebarItemProps) {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? "";
   const routes =
     activePaths && activePaths.length > 0
       ? activePaths
