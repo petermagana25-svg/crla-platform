@@ -2,6 +2,10 @@ import { getViewMode } from '@/lib/view-mode';
 
 export async function getPostAuthRedirectPathClient() {
   try {
+    if (typeof window !== 'undefined' && window.location.pathname === '/set-password') {
+      return '/set-password';
+    }
+
     const response = await fetch('/api/auth/access-state', {
       method: 'GET',
       cache: 'no-store',
