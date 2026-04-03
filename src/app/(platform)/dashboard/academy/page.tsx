@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -23,6 +23,11 @@ type AcademyResource = {
   description: string | null;
   file_url: string | null;
   created_at: string | null;
+};
+
+type AgentCertificationRecord = {
+  certification_status: CertificationStatus | null;
+  id: string;
 };
 
 function inferResourceType(resource: AcademyResource) {
@@ -66,7 +71,7 @@ export default function AcademyPage() {
     type: "error" | "success";
   } | null>(null);
 
-  async function fetchAcademyResources() {
+  const fetchAcademyResources = useCallback(async () => {
     setIsLoading(true);
 
     const {
@@ -87,19 +92,25 @@ export default function AcademyPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("agents")
-          .select("certification_status")
-          .eq("id", user.id)
+          .select("id, certification_status")
+          .eq("user_id", user.id)
           .maybeSingle(),
       ]);
+
+    console.log("agent fetch", {
+      source: "academy",
+      userId: user.id,
+      found: Boolean(agentData),
+    });
 
     setResources(error ? [] : data ?? []);
     setCertificationStatus(
       agentError || !agentData?.certification_status
         ? "not_started"
-        : (agentData.certification_status as CertificationStatus)
+        : ((agentData as AgentCertificationRecord).certification_status as CertificationStatus)
     );
     setIsLoading(false);
-  }
+  }, [router]);
 
   async function updateCertificationStatus(nextStatus: CertificationStatus) {
     setIsUpdatingCertification(true);
@@ -151,7 +162,7 @@ export default function AcademyPage() {
 
   useEffect(() => {
     void fetchAcademyResources();
-  }, []);
+  }, [fetchAcademyResources]);
 
   const certificationBadgeClass =
     certificationStatus === "completed"

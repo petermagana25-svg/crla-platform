@@ -87,12 +87,19 @@ export default function LoginPage() {
     setFeedback(null);
     setIsSendingResetEmail(true);
 
-    const redirectBaseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-      window.location.origin;
+    const redirectBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+
+    if (!redirectBaseUrl) {
+      setIsSendingResetEmail(false);
+      setFeedback({
+        type: "error",
+        text: "Password reset is temporarily unavailable.",
+      });
+      return;
+    }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${redirectBaseUrl}/reset-password`,
+      redirectTo: `${redirectBaseUrl}/set-password`,
     });
 
     if (error) {

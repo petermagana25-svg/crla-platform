@@ -28,7 +28,7 @@ export async function getPostAuthRedirectPathClient() {
     }
 
     if (result.role === 'agent' && !result.profileCompleted) {
-      return '/onboarding/profile';
+      return '/onboarding';
     }
 
     return '/dashboard';

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { refreshAgentActivationStatus } from '@/lib/agent-activation';
-import { sendEmail } from '@/lib/email';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { apiError, getUserByEmail, requireAdmin } from '../_utils';
 
@@ -37,8 +36,8 @@ export async function POST(request: Request) {
 
     const admin = createSupabaseAdminClient();
 
+    let agentRecordId: string | null = null;
     let createdUserId: string | null = null;
-    let approvedUserId: string | null = null;
     let insertedAgentRow = false;
     let applicationMarkedApproved = false;
 
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
         await admin
           .from('agents')
           .select(
-            'id, role, is_active, certification_status, profile_completed, agent_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
+            'id, user_id, role, is_active, certification_status, profile_completed, agent_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
           )
           .eq('email', email)
           .maybeSingle();
@@ -117,12 +116,17 @@ export async function POST(request: Request) {
       const redirectTo = `${redirectBaseUrl}/set-password`;
       const approvedUserMetadata = {
         full_name: fullName,
-        license_number: licenseNumber,
+        role: 'agent',
       };
-      let activationLink = '';
-      let linkType: 'invite' | 'recovery' = 'invite';
+      let inviteMode: 'invite' | 'recovery' = 'invite';
+      let authUserId: string | null = existingUser?.id ?? null;
 
       if (existingUser) {
+        console.log('USER FOUND IN AUTH', {
+          email,
+          authUserId: existingUser.id,
+        });
+
         const { error: updateUserError } = await admin.auth.admin.updateUserById(
           existingUser.id,
           {
@@ -139,160 +143,180 @@ export async function POST(request: Request) {
           );
         }
 
-        const { data: recoveryLink, error: recoveryError } =
-          await admin.auth.admin.generateLink({
-            type: 'recovery',
+        const { error: recoveryError } = await admin.auth.resetPasswordForEmail(
+          email,
+          {
+            redirectTo,
+          }
+        );
+
+        if (recoveryError) {
+          console.error('RESET EMAIL FAILED', {
             email,
-            options: {
-              redirectTo,
-            },
+            error: recoveryError,
           });
 
-        if (recoveryError || !recoveryLink.properties?.action_link) {
           return apiError(
-            'generate_link_failed',
-            recoveryError?.message || 'Failed to generate activation link.',
+            'invite_email_failed',
+            recoveryError.message || 'Failed to send password setup email.',
             500
           );
         }
 
-        approvedUserId = existingUser.id;
-        activationLink = recoveryLink.properties.action_link;
-        linkType = 'recovery';
+        inviteMode = 'recovery';
+        console.log('RESET EMAIL SENT', {
+          email,
+          authUserId: existingUser.id,
+        });
       } else {
-        const { data: inviteLink, error: inviteError } =
-          await admin.auth.admin.generateLink({
-            type: 'invite',
-            email,
-            options: {
-              data: approvedUserMetadata,
-              redirectTo,
-            },
+        console.log('USER NOT FOUND IN AUTH', {
+          email,
+        });
+
+        const { data: inviteResult, error: inviteError } =
+          await admin.auth.admin.inviteUserByEmail(email, {
+            data: approvedUserMetadata,
+            redirectTo,
           });
 
-        if (inviteError || !inviteLink.user || !inviteLink.properties?.action_link) {
+        if (inviteError || !inviteResult.user) {
+          console.error('INVITE EMAIL FAILED', {
+            email,
+            error: inviteError,
+          });
+
           return apiError(
-            'generate_link_failed',
-            inviteError?.message || 'Failed to generate activation link.',
+            'invite_email_failed',
+            inviteError?.message || 'Failed to send Supabase invite email.',
             500
           );
         }
 
-        approvedUserId = inviteLink.user.id;
-        createdUserId = inviteLink.user.id;
-        activationLink = inviteLink.properties.action_link;
-        linkType = 'invite';
-      }
-
-      if (!approvedUserId) {
-        throw new Error('Failed to resolve the approved auth user.');
+        authUserId = inviteResult.user.id;
+        createdUserId = inviteResult.user.id;
+        inviteMode = 'invite';
+        console.log('INVITE EMAIL SENT', {
+          email,
+          authUserId,
+        });
       }
 
       console.info('[admin-approve] link generated', {
         applicationId,
         email,
-        linkType,
+        inviteMode,
         redirectTo,
-        approvedUserId,
+        existingUserId: authUserId,
+        linkedUserId: existingAgentByEmail?.user_id ?? null,
       });
-
-      const { data: existingAgentById, error: existingAgentError } = await admin
-        .from('agents')
-        .select(
-          'id, role, is_active, certification_status, profile_completed, agent_status, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active'
-        )
-        .eq('id', approvedUserId)
-        .maybeSingle();
-
-      if (existingAgentError) {
-        if (createdUserId) {
-          await admin.auth.admin.deleteUser(createdUserId);
-        }
-
-        return apiError(
-          'agent_lookup_failed',
-          existingAgentError.message || 'Failed to load agent record.',
-          500
-        );
-      }
-
-      if (existingAgentByEmail && existingAgentByEmail.id !== approvedUserId) {
-        if (createdUserId) {
-          await admin.auth.admin.deleteUser(createdUserId);
-        }
-
-        return apiError(
-          'agent_email_conflict',
-          'An existing agent record already uses this email.',
-          409
-        );
-      }
-
-      const existingAgent = existingAgentByEmail ?? existingAgentById;
+      const existingAgent = existingAgentByEmail;
       const roleBeforeUpsert = existingAgent?.role ?? null;
       const role =
         roleBeforeUpsert === 'admin' ? 'admin' : roleBeforeUpsert ?? 'agent';
       const isAdminAgent = role === 'admin';
+      const nextUserId = existingAgent?.user_id ?? authUserId;
+
+      if (existingAgent?.user_id && authUserId && existingAgent.user_id !== authUserId) {
+        console.warn('[admin-approve] agent/auth linkage mismatch detected', {
+          applicationId,
+          agentId: existingAgent.id,
+          email,
+          agentUserId: existingAgent.user_id,
+          authUserId,
+        });
+      }
 
       console.log('ROLE BEFORE UPSERT:', roleBeforeUpsert);
       console.log('ROLE AFTER:', role);
       console.info('[admin-approve] applying initial agent state', {
-        approvedUserId,
+        agentId: existingAgent?.id ?? null,
         email,
+        nextUserId,
         isActive: isAdminAgent ? existingAgent?.is_active ?? true : false,
         admin_override_active:
           isAdminAgent ? existingAgent?.admin_override_active ?? null : null,
       });
 
-      const { error: agentInsertError } = await admin
-        .from('agents')
-        .upsert(
-          {
-            id: approvedUserId,
-            agent_status: existingAgent?.agent_status ?? 'pending',
+      if (existingAgent) {
+        const { error: agentUpdateError } = await admin
+          .from('agents')
+          .update({
+            agent_status: existingAgent.agent_status ?? 'pending',
             full_name: fullName,
             email,
             license_number: licenseNumber,
-            // Preserve any existing role, especially admin, and only default to
-            // agent when no role exists yet.
+            ...(existingAgent.user_id ? {} : { user_id: nextUserId }),
             role,
-            is_active: isAdminAgent ? existingAgent?.is_active ?? true : false,
+            is_active: isAdminAgent ? existingAgent.is_active ?? true : false,
             certification_status:
-              existingAgent?.certification_status ?? 'not_started',
-            profile_completed: existingAgent?.profile_completed ?? false,
+              existingAgent.certification_status ?? 'not_started',
+            profile_completed: existingAgent.profile_completed ?? false,
             admin_override_active:
-              isAdminAgent ? existingAgent?.admin_override_active ?? null : null,
+              isAdminAgent ? existingAgent.admin_override_active ?? null : null,
             admin_override_profile_complete:
               isAdminAgent
-                ? existingAgent?.admin_override_profile_complete ?? null
+                ? existingAgent.admin_override_profile_complete ?? null
                 : null,
             admin_override_training_complete:
               isAdminAgent
-                ? existingAgent?.admin_override_training_complete ?? null
+                ? existingAgent.admin_override_training_complete ?? null
                 : null,
             admin_override_membership_active:
               isAdminAgent
-                ? existingAgent?.admin_override_membership_active ?? null
+                ? existingAgent.admin_override_membership_active ?? null
                 : null,
-          },
-          { onConflict: 'id' }
-        );
+          })
+          .eq('id', existingAgent.id);
 
-      if (agentInsertError) {
-        throw new Error(
-          agentInsertError.message || 'Failed to insert agent row.'
-        );
+        if (agentUpdateError) {
+          throw new Error(
+            agentUpdateError.message || 'Failed to update agent row.'
+          );
+        }
+
+        agentRecordId = existingAgent.id;
+      } else {
+        const { data: insertedAgent, error: agentInsertError } = await admin
+          .from('agents')
+          .insert({
+            agent_status: 'pending',
+            full_name: fullName,
+            email,
+            license_number: licenseNumber,
+            user_id: nextUserId,
+            role,
+            is_active: false,
+            certification_status: 'not_started',
+            profile_completed: false,
+            admin_override_active: null,
+            admin_override_profile_complete: null,
+            admin_override_training_complete: null,
+            admin_override_membership_active: null,
+          })
+          .select('id')
+          .single();
+
+        if (agentInsertError || !insertedAgent) {
+          throw new Error(
+            agentInsertError?.message || 'Failed to insert agent row.'
+          );
+        }
+
+        insertedAgentRow = true;
+        agentRecordId = insertedAgent.id;
       }
 
-      insertedAgentRow = !existingAgent;
+      if (!agentRecordId) {
+        throw new Error('Failed to resolve the approved agent record.');
+      }
 
       console.info('[admin-approve] skipping membership bootstrap', {
-        approvedUserId,
+        agentRecordId,
         reason:
           'Newly approved agents should remain membership-inactive until they activate membership.',
       });
 
-      await refreshAgentActivationStatus(approvedUserId, admin);
+      await refreshAgentActivationStatus(agentRecordId, admin);
 
       const { error: updateError } = await admin
         .from('agent_applications')
@@ -306,80 +330,20 @@ export async function POST(request: Request) {
       }
 
       applicationMarkedApproved = true;
-      const loginUrl = `${redirectBaseUrl}/login`;
-      const approvalEmailHtml = `
-        <p>Hi ${fullName},</p>
-
-        <p>Welcome to CRLA — Certified Renovation Listing Agent.</p>
-
-        <p>Your account has been approved. You can now access your agent dashboard using the link below:</p>
-
-        <p>
-          <a href="${loginUrl}">
-            Access Your Agent Portal
-          </a>
-        </p>
-
-        <p>If this is your first time signing in, complete your account setup here:</p>
-
-        <p>
-          <a href="${activationLink}">
-            Set Your Password
-          </a>
-        </p>
-
-        <p>To become a fully certified and listed agent, please complete the following steps:</p>
-
-        <ol>
-          <li>Complete your profile</li>
-          <li>Finish your certification training</li>
-          <li>Activate your membership</li>
-        </ol>
-
-        <p>Once completed, your profile will be visible to homeowners and buyers on the platform.</p>
-
-        <p>We’re excited to have you on board.</p>
-
-        <p>— CRLA Team</p>
-      `;
-      const approvalEmailText = `Hi ${fullName},
-
-Welcome to CRLA — Certified Renovation Listing Agent.
-
-Your account has been approved. You can now access your agent dashboard here:
-${loginUrl}
-
-If this is your first time signing in, complete your account setup here:
-${activationLink}
-
-To become a fully certified and listed agent, please complete the following steps:
-1. Complete your profile
-2. Finish your certification training
-3. Activate your membership
-
-Once completed, your profile will be visible to homeowners and buyers on the platform.
-
-We’re excited to have you on board.
-
-CRLA Team`;
-
-      try {
-        await sendEmail({
-          to: email,
-          subject: 'Welcome to CRLA — Your Agent Access is Ready',
-          html: approvalEmailHtml,
-          text: approvalEmailText,
-        });
-
-        console.log('Approval email sent to:', email);
-      } catch (error) {
-        console.error('Approval email error:', error);
-        throw error;
-      }
+      console.log('APPLICATION APPROVED', {
+        applicationId,
+        agentRecordId,
+        email,
+        inviteMode,
+      });
 
       return NextResponse.json({
         success: true,
-        message: 'Agent approved and activation email sent.',
+        message:
+          inviteMode === 'recovery'
+            ? 'Agent approved and reset email sent.'
+            : 'Agent approved and invite email sent.',
+        inviteMode,
       });
     } catch (error) {
       if (applicationMarkedApproved) {
@@ -389,8 +353,8 @@ CRLA Team`;
           .eq('id', applicationId);
       }
 
-      if (insertedAgentRow && approvedUserId) {
-        await admin.from('agents').delete().eq('id', approvedUserId);
+      if (insertedAgentRow && agentRecordId) {
+        await admin.from('agents').delete().eq('id', agentRecordId);
       }
 
       if (createdUserId) {

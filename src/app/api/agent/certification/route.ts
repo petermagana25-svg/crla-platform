@@ -48,10 +48,32 @@ export async function POST(request: Request) {
     }
 
     const admin = createSupabaseAdminClient();
+    const { data: agentRecord, error: agentLookupError } = await admin
+      .from('agents')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (agentLookupError) {
+      throw new Error(
+        agentLookupError.message || 'Unable to find your linked agent profile.'
+      );
+    }
+
+    if (!agentRecord) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: 'No linked agent profile was found for this account.' },
+        },
+        { status: 404 }
+      );
+    }
+
     const { error: updateError } = await admin
       .from('agents')
       .update({ certification_status: nextStatus })
-      .eq('id', user.id);
+      .eq('id', agentRecord.id);
 
     if (updateError) {
       throw new Error(
@@ -59,7 +81,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await refreshAgentActivationStatus(user.id, admin);
+    const result = await refreshAgentActivationStatus(agentRecord.id, admin);
 
     return NextResponse.json({
       success: true,

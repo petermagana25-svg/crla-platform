@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShieldCheck, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getPostAuthRedirectPathClient } from '@/lib/get-post-auth-redirect-path-client';
 
 type PasswordSetupFormProps = {
   eyebrow: string;
@@ -19,6 +19,7 @@ export default function PasswordSetupForm({
   description,
   variant,
 }: PasswordSetupFormProps) {
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,6 +27,9 @@ export default function PasswordSetupForm({
   const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [resolvedVariant, setResolvedVariant] = useState<'invite' | 'recovery'>(
+    variant
+  );
   const [message, setMessage] = useState<{
     type: 'success' | 'error';
     text: string;
@@ -44,14 +48,22 @@ export default function PasswordSetupForm({
     const currentUrl = new URL(window.location.href);
     const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
     const searchParams = currentUrl.searchParams;
+    const authType = searchParams.get('type') || hashParams.get('type');
+    const nextVariant = authType === 'recovery' ? 'recovery' : variant;
     const errorDescription =
       searchParams.get('error_description') ||
       hashParams.get('error_description');
     const errorCode =
       searchParams.get('error_code') || hashParams.get('error_code');
+    const hasAuthMarkers =
+      hashParams.has('access_token') ||
+      hashParams.has('type') ||
+      searchParams.has('type');
+
+    setResolvedVariant(nextVariant);
 
     if (errorDescription || errorCode) {
-      setLinkError(readLinkErrorMessage(errorDescription, errorCode, variant));
+      setLinkError(readLinkErrorMessage(errorDescription, errorCode, nextVariant));
     }
 
     const {
@@ -62,21 +74,42 @@ export default function PasswordSetupForm({
 
     if (session) {
       setLinkError(null);
+      return;
+    }
+
+    if (!hasAuthMarkers && !errorDescription && !errorCode) {
+      router.replace('/login');
     }
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSessionState();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsReady(Boolean(session));
+
+      if (session) {
+        setLinkError(null);
+      }
     });
 
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!linkError || isReady) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      router.replace('/login');
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isReady, linkError, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,25 +139,27 @@ export default function PasswordSetupForm({
 
     if (error) {
       setLoading(false);
-      setLinkError(readPasswordUpdateError(error.message, variant));
+      setLinkError(readPasswordUpdateError(error.message, resolvedVariant));
       setMessage({
         type: 'error',
         text: readPasswordUpdateError(
           error.message || 'Unable to update your password.',
-          variant
+          resolvedVariant
         ),
       });
       return;
     }
 
-    const redirectTo = await getPostAuthRedirectPathClient();
+    console.log('password updated', {
+      variant: resolvedVariant,
+    });
 
     setMessage({
       type: 'success',
       text: 'Password updated. Redirecting...',
     });
 
-    window.location.href = redirectTo;
+    window.location.href = '/dashboard';
   }
 
   return (

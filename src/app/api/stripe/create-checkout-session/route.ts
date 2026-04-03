@@ -52,11 +52,28 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Missing agentId' }, { status: 400 });
     }
 
-    if (agentId !== user.id) {
+    const { data: agentRecord, error: agentLookupError } = await supabase
+      .from('agents')
+      .select('id')
+      .eq('id', agentId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (agentLookupError) {
       return NextResponse.json(
         {
           success: false,
-          error: { message: 'You can only create a checkout session for yourself.' },
+          error: { message: agentLookupError.message || 'Unable to verify agent access.' },
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!agentRecord) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: 'You can only create a checkout session for your linked agent profile.' },
         },
         { status: 403 }
       );

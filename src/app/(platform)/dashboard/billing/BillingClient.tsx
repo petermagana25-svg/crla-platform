@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/lib/supabase";
 
 type AgentAccess = {
+  id: string;
   profile_completed: boolean | null;
   role: string | null;
 };
@@ -53,17 +54,33 @@ export default function BillingClient() {
 
     const { data: agentAccessRaw } = await supabase
       .from("agents")
-      .select("profile_completed, role")
-      .eq("id", user.id)
+      .select("id, profile_completed, role")
+      .eq("user_id", user.id)
       .maybeSingle();
 
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
+    console.log("agent fetch", {
+      source: "billing",
+      userId: user.id,
+      found: Boolean(agentAccess),
+    });
     const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
 
     if (role !== "admin" && !agentAccess?.profile_completed) {
-      router.replace("/onboarding/profile");
+      router.replace("/onboarding");
       return;
     }
+
+    if (!agentAccess && role !== "admin") {
+      setMessage({
+        type: "error",
+        text: "No linked agent profile was found for this account.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const resolvedAgentId = agentAccess?.id ?? user.id;
 
     const [
       { data: membershipsData, error: membershipsError },
@@ -74,13 +91,13 @@ export default function BillingClient() {
         .select(
           "id, plan_name, status, amount, currency, renewal_period, starts_at, expires_at, created_at"
         )
-        .eq("agent_id", user.id)
+        .eq("agent_id", resolvedAgentId)
         .order("created_at", { ascending: false })
         .limit(10),
       supabase
         .from("membership_payments")
         .select("id, amount, currency, status, paid_at, invoice_url, created_at")
-        .eq("agent_id", user.id)
+        .eq("agent_id", resolvedAgentId)
         .order("created_at", { ascending: false })
         .limit(10),
     ]);
@@ -108,7 +125,13 @@ export default function BillingClient() {
         return;
       }
 
-      const agentId = user.id?.trim();
+      const { data: agentAccessRaw } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const agentId = agentAccessRaw?.id?.trim();
 
       if (!agentId) {
         throw new Error("Missing agentId for Stripe checkout.");

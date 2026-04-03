@@ -18,22 +18,14 @@ type RefreshResult = {
 type ActivationClient = ReturnType<typeof createSupabaseAdminClient>;
 
 export async function refreshAgentActivationStatus(
-  agentId: string,
+  agentIdentifier: string,
   supabaseAdmin: ActivationClient = createSupabaseAdminClient()
 ): Promise<RefreshResult> {
-  const [{ data: agent, error: agentError }, { data: memberships, error: membershipsError }] =
-    await Promise.all([
-      supabaseAdmin
-        .from('agents')
-        .select('profile_completed, certification_status')
-        .eq('id', agentId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from('memberships')
-        .select('id, status, starts_at, expires_at, created_at')
-        .eq('agent_id', agentId)
-        .order('created_at', { ascending: false }),
-    ]);
+  const { data: agent, error: agentError } = await supabaseAdmin
+    .from('agents')
+    .select('id, profile_completed, certification_status')
+    .or(`id.eq.${agentIdentifier},user_id.eq.${agentIdentifier}`)
+    .maybeSingle();
 
   if (agentError) {
     throw new Error(agentError.message || 'Unable to load agent activation data.');
@@ -42,6 +34,15 @@ export async function refreshAgentActivationStatus(
   if (!agent) {
     throw new Error('Agent not found.');
   }
+
+  const [{ data: memberships, error: membershipsError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('memberships')
+        .select('id, status, starts_at, expires_at, created_at')
+        .eq('agent_id', agent.id)
+        .order('created_at', { ascending: false }),
+    ]);
 
   if (membershipsError) {
     throw new Error(
@@ -77,7 +78,7 @@ export async function refreshAgentActivationStatus(
   const { error: updateError } = await supabaseAdmin
     .from('agents')
     .update({ agent_status: agentStatus })
-    .eq('id', agentId);
+    .eq('id', agent.id);
 
   if (updateError) {
     throw new Error(updateError.message || 'Unable to refresh agent status.');

@@ -42,7 +42,7 @@ export async function requireAdmin() {
     const { data: agent, error: agentError } = await supabaseServer
       .from('agents')
       .select('role')
-      .eq('id', user.id)
+      .or(`user_id.eq.${user.id},id.eq.${user.id}`)
       .maybeSingle();
 
     if (agentError) {

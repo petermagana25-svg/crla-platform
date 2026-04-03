@@ -23,7 +23,7 @@ export function resolvePostAuthRedirect(
   }
 
   if (accessState.role === 'agent' && !accessState.profileCompleted) {
-    return '/onboarding/profile';
+    return '/onboarding';
   }
 
   return '/dashboard';
@@ -47,8 +47,14 @@ export async function getCurrentUserAccessState(): Promise<CurrentUserAccessStat
   const { data: agent } = await supabase
     .from('agents')
     .select('role, profile_completed')
-    .eq('id', user.id)
+    .eq('user_id', user.id)
     .maybeSingle();
+
+  console.log('agent fetch', {
+    source: 'getCurrentUserAccessState',
+    userId: user.id,
+    found: Boolean(agent),
+  });
 
   const role = (agent?.role as UserRole | undefined) ?? null;
 

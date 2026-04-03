@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
+import ChangePasswordSection from "@/components/dashboard/ChangePasswordSection";
 import { getCurrentUserRoleClient } from "@/lib/get-current-user-role-client";
 import { computeAgentStatus } from "@/lib/agent-status";
 import {
@@ -65,6 +66,7 @@ type AgentAccess = {
     | "completed"
     | "certified"
     | null;
+  id: string;
   full_name: string | null;
   is_active: boolean | null;
   license_number: string | null;
@@ -524,12 +526,13 @@ export default function AgentDashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [agentLookupError, setAgentLookupError] = useState<string | null>(null);
   const [listingViewCount, setListingViewCount] = useState(0);
   const [leadsCount, setLeadsCount] = useState(0);
   const [profileViewCount, setProfileViewCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     setIsLoading(true);
 
     const {
@@ -541,13 +544,57 @@ export default function AgentDashboardPage() {
       return;
     }
 
+    const [{ data: agentAccessRaw, error: agentAccessError }, { data: profileData }] =
+      await Promise.all([
+        supabase
+          .from("agents")
+          .select(
+            "id, agent_status, city, certification_status, full_name, is_active, license_number, profile_completed, role, state, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active"
+          )
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", user.id)
+          .maybeSingle(),
+      ]);
+
+    const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
+    console.log("agent fetch", {
+      source: "dashboard",
+      userId: user.id,
+      found: Boolean(agentAccess),
+    });
+
+    if (agentAccessError) {
+      setAgentLookupError(
+        agentAccessError.message || "Unable to load your agent profile."
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
+    const admin = role === "admin";
+
+    if (!agentAccess && !admin) {
+      setAgentLookupError(
+        "No linked agent profile was found for this account. Please contact support."
+      );
+      setProfile(profileData);
+      setAgentAccess(null);
+      setIsAdmin(false);
+      setIsLoading(false);
+      return;
+    }
+
+    const resolvedAgentId = agentAccess?.id ?? user.id;
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoIso = thirtyDaysAgo.toISOString();
 
     const [
-      { data: agentAccessRaw },
-      { data: profileData },
       { data: marketingAssetData, error: marketingAssetsError },
       { data: academyResourceData, error: academyResourcesError },
       { data: membershipsData, error: membershipsError },
@@ -558,18 +605,6 @@ export default function AgentDashboardPage() {
       { count: unreadMessagesCount, error: unreadMessagesError },
     ] =
       await Promise.all([
-        supabase
-          .from("agents")
-          .select(
-            "agent_status, city, certification_status, full_name, is_active, license_number, profile_completed, role, state, admin_override_active, admin_override_profile_complete, admin_override_training_complete, admin_override_membership_active"
-          )
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("profiles")
-          .select("avatar_url")
-          .eq("id", user.id)
-          .maybeSingle(),
         supabase
           .from("marketing_assets")
           .select("id, title, category, description, file_url, created_at")
@@ -585,7 +620,7 @@ export default function AgentDashboardPage() {
           .select(
             "id, plan_name, status, amount, currency, renewal_period, starts_at, expires_at, created_at"
           )
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .order("created_at", { ascending: false })
           .limit(10),
         supabase
@@ -593,35 +628,32 @@ export default function AgentDashboardPage() {
           .select(
             "expected_completion_date, id, projected_price, status, title"
           )
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .order("created_at", { ascending: false })
           .limit(3),
         supabase
           .from("profile_views")
           .select("id", { count: "exact", head: true })
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .gte("created_at", thirtyDaysAgoIso),
         supabase
           .from("listing_views")
           .select("id", { count: "exact", head: true })
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .gte("created_at", thirtyDaysAgoIso),
         supabase
           .from("messages")
           .select("id", { count: "exact", head: true })
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .gte("created_at", thirtyDaysAgoIso),
         supabase
           .from("messages")
           .select("id", { count: "exact", head: true })
-          .eq("agent_id", user.id)
+          .eq("agent_id", resolvedAgentId)
           .eq("sender_type", "client")
           .eq("status", "unread"),
       ]);
 
-    const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
-    const role = agentAccess?.role ?? (await getCurrentUserRoleClient());
-    const admin = role === "admin";
     const preferredMembership = membershipsError
       ? null
       : selectPreferredMembership(membershipsData ?? []);
@@ -633,14 +665,10 @@ export default function AgentDashboardPage() {
       : null;
     setAgentAccess(agentAccess);
     setIsAdmin(admin);
+    setAgentLookupError(null);
 
     if (!admin && !computedAgentStatus?.profileComplete) {
-      router.push("/onboarding/profile");
-      return;
-    }
-
-    if (!profileData && !admin) {
-      router.push("/onboarding/profile");
+      router.push("/onboarding");
       return;
     }
 
@@ -658,12 +686,12 @@ export default function AgentDashboardPage() {
       unreadMessagesError ? 0 : unreadMessagesCount ?? 0
     );
     setIsLoading(false);
-  }
+  }, [router]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDashboard();
-  }, []);
+  }, [loadDashboard]);
 
   async function handleLogout() {
     setIsLoggingOut(true);
@@ -672,7 +700,7 @@ export default function AgentDashboardPage() {
 
   function handleOpenProfileSettings() {
     setViewMode("agent");
-    router.push("/onboarding/profile");
+    router.push("/onboarding");
   }
 
   function handleDashboardReset() {
@@ -905,7 +933,7 @@ export default function AgentDashboardPage() {
                       icon={<User size={18} />}
                       label="Profile Settings"
                       onClick={handleOpenProfileSettings}
-                      activePaths={["/onboarding/profile"]}
+                      activePaths={["/onboarding"]}
                       exactMatch
                       tone="account"
                     />
@@ -941,6 +969,12 @@ export default function AgentDashboardPage() {
             </aside>
 
             <section className="space-y-8">
+              {agentLookupError && (
+                <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                  {agentLookupError}
+                </div>
+              )}
+
               <div className="rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-8 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -1033,7 +1067,7 @@ export default function AgentDashboardPage() {
                 <div className="mt-4 grid gap-3 lg:grid-cols-3">
                   <ActivationStepCard
                     title="Profile Setup"
-                    href="/onboarding/profile"
+                    href="/onboarding"
                     icon={<User size={18} />}
                     status={profileStepStatus}
                   />
@@ -1129,6 +1163,8 @@ export default function AgentDashboardPage() {
                   </Link>
                 </div>
               </div>
+
+              <ChangePasswordSection />
 
               <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
                 <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
