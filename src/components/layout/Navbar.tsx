@@ -6,7 +6,8 @@ import Container from "./Container";
 import BadgeLogo from "../ui/BadgeLogo";
 
 export default function Navbar() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? "";
 
   const navLink =
     "text-[var(--text-muted)] transition hover:text-white";

@@ -18,7 +18,8 @@ const navigation = [
 ];
 
 export default function AdminChrome({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? '';
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const headerButtonClass =
