@@ -380,16 +380,16 @@ export default function Navbar() {
 
       {isMobileMenuRendered ? (
         <div
-          className={`fixed inset-0 z-[60] bg-[rgba(7,12,24,0.94)] backdrop-blur-2xl transition duration-200 md:hidden ${
+          className={`fixed inset-0 z-[60] max-h-screen overflow-y-auto overscroll-contain bg-[rgba(7,12,24,0.94)] backdrop-blur-2xl transition duration-200 md:hidden ${
             isMobileMenuOpen ? "opacity-100" : "opacity-0"
           }`}
         >
           <Container
-            className={`flex min-h-screen flex-col justify-between py-6 transition duration-200 ${
+            className={`sticky-safe-bottom flex min-h-screen flex-col py-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] transition duration-200 ${
               isMobileMenuOpen ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-            } sticky-safe-bottom`}
+            }`}
           >
-            <div>
+            <div className="flex-1">
               <div className="flex items-center justify-between gap-4">
                 <BadgeLogo />
                 <button
@@ -459,7 +459,7 @@ export default function Navbar() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="mt-6 space-y-3">
               {isPlatformRoute ? (
                 <button
                   type="button"
