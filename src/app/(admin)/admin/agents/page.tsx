@@ -171,7 +171,7 @@ export default async function AdminAgentsPage({
         );
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 pb-[calc(env(safe-area-inset-bottom)+80px)] md:pb-0">
       <div>
         <h2 className="text-xl font-semibold text-white">Agents</h2>
         <p className="mt-1 text-sm text-slate-400">
@@ -181,24 +181,24 @@ export default async function AdminAgentsPage({
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <form action="/admin/agents" className="flex w-full max-w-xl gap-3">
+        <form action="/admin/agents" className="flex w-full max-w-xl flex-col gap-3 sm:flex-row">
           <input
             type="text"
             name="search"
             defaultValue={search}
             placeholder="Search agents..."
-            className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white transition-all duration-200 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
+            className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white transition-all duration-200 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
           />
           {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
           <button
             type="submit"
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-white/10"
+            className="min-h-11 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition-all duration-200 hover:bg-white/10"
           >
             Search
           </button>
         </form>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           {(['all', 'active', 'inactive'] as AdminAgentFilterStatus[]).map(
             (value) => {
               const isSelected = filter === value;
@@ -207,7 +207,7 @@ export default async function AdminAgentsPage({
                 <Link
                   key={value}
                   href={buildAgentsHref({ filter: value, search })}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                  className={`rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                     isSelected
                       ? 'bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.25)]'
                       : 'border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
@@ -235,9 +235,9 @@ export default async function AdminAgentsPage({
           {filteredAgents.map((agent) => (
             <section
               key={agent.id}
-              className="rounded-lg bg-[#0B1220] p-4 transition-all duration-200 hover:bg-white/10"
+              className="w-full rounded-2xl border border-white/10 bg-[#0B1220] p-4 transition-all duration-200 hover:bg-white/10 md:p-5"
             >
-              <div className="mb-3 rounded-md border-b border-white/10 bg-white/10 px-3 py-2">
+              <div className="mb-3 rounded-xl border-b border-white/10 bg-white/10 px-3 py-3">
                 <h3 className="text-base font-semibold text-white">
                   {agent.full_name || 'Unnamed agent'}
                 </h3>

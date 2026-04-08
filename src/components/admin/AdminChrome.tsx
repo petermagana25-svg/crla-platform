@@ -36,9 +36,9 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="flex min-h-screen">
-        <aside className="w-full max-w-xs border-r border-white/10 bg-slate-900/80 px-6 py-8">
+    <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <aside className="hidden w-full max-w-xs border-r border-white/10 bg-slate-900/80 px-6 py-8 md:block">
           <div className="mb-8">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
               Admin
@@ -71,14 +71,19 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="border-b border-white/10 bg-slate-950/80 px-6 py-5 backdrop-blur">
-            <div className="flex items-center justify-between gap-4">
-              <h1 className="text-2xl font-semibold text-white">Admin Panel</h1>
-              <div className="flex items-center gap-3">
+          <header className="border-b border-white/10 bg-slate-950/80 px-4 py-4 backdrop-blur sm:px-6 md:px-6 md:py-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-slate-400 md:hidden">
+                  Admin
+                </p>
+                <h1 className="text-2xl font-semibold text-white">Admin Panel</h1>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <button
                   type="button"
                   onClick={handleSwitchToAgentView}
-                  className={headerButtonClass}
+                  className={`${headerButtonClass} min-h-11 justify-center`}
                 >
                   Switch to Agent View
                 </button>
@@ -86,15 +91,38 @@ export default function AdminChrome({ children }: { children: ReactNode }) {
                   type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className={headerButtonClass}
+                  className={`${headerButtonClass} min-h-11 justify-center`}
                 >
                   {isLoggingOut ? 'Logging out...' : 'Logout'}
                 </button>
               </div>
             </div>
+
+            <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
+              {navigation.map((item) => {
+                const isActive =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-medium ${sharedNavItemBaseClass} ${
+                      isActive
+                        ? sharedActiveNavItemClass
+                        : sharedInactiveNavItemClass
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </header>
 
-          <main className="flex-1 px-6 py-8">{children}</main>
+          <main className="flex-1 px-4 py-6 pb-[calc(env(safe-area-inset-bottom)+80px)] sm:px-6 md:px-6 md:py-8 md:pb-8">
+            {children}
+          </main>
         </div>
       </div>
     </div>

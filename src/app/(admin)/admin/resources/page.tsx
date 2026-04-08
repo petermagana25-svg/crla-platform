@@ -16,6 +16,17 @@ type Resource = {
 
 const categoryOptions: ResourceCategory[] = ['marketing', 'training'];
 
+function getCategoryBadgeClass(category: ResourceCategory | null) {
+  switch (category) {
+    case 'marketing':
+      return 'border-sky-400/30 bg-sky-400/10 text-sky-200';
+    case 'training':
+      return 'border-violet-400/30 bg-violet-400/10 text-violet-200';
+    default:
+      return 'border-white/10 bg-white/5 text-slate-300';
+  }
+}
+
 export default function AdminResourcesPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -212,7 +223,7 @@ export default function AdminResourcesPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 pb-[calc(env(safe-area-inset-bottom)+80px)] md:pb-0">
       <div>
         <h2 className="text-xl font-semibold text-white">Resources</h2>
         <p className="mt-1 text-sm text-slate-400">
@@ -234,7 +245,7 @@ export default function AdminResourcesPage() {
 
       <form
         onSubmit={handleUpload}
-        className="rounded-2xl border border-white/10 bg-white/5 p-6"
+        className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -296,11 +307,11 @@ export default function AdminResourcesPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex items-center gap-4">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="submit"
             disabled={isUploading}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-lg bg-white px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {isUploading ? 'Uploading...' : 'Upload Resource'}
           </button>
@@ -310,7 +321,90 @@ export default function AdminResourcesPage() {
         </div>
       </form>
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+      <div className="space-y-4 md:hidden">
+        {resources.map((resource) => {
+          const isDeleting = activeDeleteId === resource.id;
+
+          return (
+            <article
+              key={resource.id}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,.18)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-white">
+                    {resource.title || 'Untitled resource'}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {formatCreatedAt(resource.created_at)}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] ${getCategoryBadgeClass(
+                    resource.category
+                  )}`}
+                >
+                  {resource.category || 'unknown'}
+                </span>
+              </div>
+
+              <dl className="mt-4 space-y-3">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Description
+                  </dt>
+                  <dd className="mt-1 text-sm leading-6 text-slate-300">
+                    {resource.description || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Resource ID
+                  </dt>
+                  <dd className="mt-1 break-all text-sm text-slate-400">
+                    {resource.id}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="mt-5 space-y-2">
+                {resource.file_url ? (
+                  <a
+                    href={resource.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-h-11 w-full items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm font-medium text-sky-200 transition hover:bg-sky-400/20"
+                  >
+                    Open file
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(resource)}
+                  disabled={isDeleting || isUploading}
+                  className="min-h-11 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? 'Updating...' : 'Delete'}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+
+        {!isLoading && resources.length === 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+            No resources found.
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+            Loading resources...
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-2xl border border-white/10 bg-white/5 md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-left">
             <thead className="bg-white/5">
@@ -329,7 +423,15 @@ export default function AdminResourcesPage() {
                 return (
                   <tr key={resource.id} className="text-sm text-slate-200">
                     <td className="px-4 py-4">{resource.title || '—'}</td>
-                    <td className="px-4 py-4">{resource.category || '—'}</td>
+                    <td className="px-4 py-4">
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getCategoryBadgeClass(
+                          resource.category
+                        )}`}
+                      >
+                        {resource.category || '—'}
+                      </span>
+                    </td>
                     <td className="px-4 py-4">
                       {resource.file_url ? (
                         <a

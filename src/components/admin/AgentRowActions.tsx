@@ -245,7 +245,7 @@ export default function AgentRowActions({ agent }: AgentRowActionsProps) {
       })}
 
       <div className="border-t border-white/10 pt-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <button
             type="button"
             onClick={() => {
@@ -254,7 +254,7 @@ export default function AgentRowActions({ agent }: AgentRowActionsProps) {
               setConfirmAction('reset');
             }}
             disabled={isBusy || isProtectedAgent}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:text-xs"
           >
             {pendingMutation === 'reset' ? 'Resetting...' : 'Reset Agent'}
           </button>
@@ -267,7 +267,7 @@ export default function AgentRowActions({ agent }: AgentRowActionsProps) {
               setConfirmAction('delete');
             }}
             disabled={isBusy || isProtectedAgent}
-            className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs font-medium text-red-200 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 w-full rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:text-xs"
           >
             {pendingMutation === 'delete' ? 'Deleting...' : 'Delete Agent'}
           </button>

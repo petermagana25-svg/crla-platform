@@ -12,6 +12,19 @@ type AgentApplication = {
   status: string | null;
 };
 
+function getStatusBadgeClass(status: string | null) {
+  switch (status) {
+    case 'pending':
+      return 'border-amber-400/30 bg-amber-400/10 text-amber-200';
+    case 'approved':
+      return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200';
+    case 'rejected':
+      return 'border-red-400/30 bg-red-400/10 text-red-200';
+    default:
+      return 'border-white/10 bg-white/5 text-slate-300';
+  }
+}
+
 export default function AdminApplicationsPage() {
   const router = useRouter();
   const [applications, setApplications] = useState<AgentApplication[]>([]);
@@ -248,7 +261,7 @@ export default function AdminApplicationsPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 pb-[calc(env(safe-area-inset-bottom)+80px)] md:pb-0">
       <div>
         <h2 className="text-xl font-semibold text-white">Applications</h2>
         <p className="mt-1 text-sm text-slate-400">
@@ -268,7 +281,108 @@ export default function AdminApplicationsPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+      <div className="space-y-4 md:hidden">
+        {applications.map((application) => {
+          const isPending = application.status === 'pending';
+          const isProcessing = activeRow?.id === application.id;
+          const isApproving = isProcessing && activeRow?.action === 'approve';
+          const isRejecting = isProcessing && activeRow?.action === 'reject';
+          const isDeleting = isProcessing && activeRow?.action === 'delete';
+
+          return (
+            <article
+              key={application.id}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,.18)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-white">
+                    {application.full_name || 'Unnamed applicant'}
+                  </h3>
+                  <p className="mt-1 break-words text-sm text-slate-400">
+                    {application.email || application.id}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] ${getStatusBadgeClass(
+                    application.status
+                  )}`}
+                >
+                  {application.status || 'unknown'}
+                </span>
+              </div>
+
+              <dl className="mt-4 space-y-3">
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    License Number
+                  </dt>
+                  <dd className="mt-1 text-sm text-slate-200">
+                    {application.license_number || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    Application ID
+                  </dt>
+                  <dd className="mt-1 break-all text-sm text-slate-400">
+                    {application.id}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="mt-5 space-y-2">
+                {isPending ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(application)}
+                      disabled={isProcessing}
+                      className="min-h-11 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isApproving ? 'Saving...' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReject(application.id)}
+                      disabled={isProcessing}
+                      className="min-h-11 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isRejecting ? 'Saving...' : 'Reject'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                    No actions available
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(application)}
+                  disabled={isProcessing}
+                  className="min-h-11 w-full rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm font-medium text-red-200 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+
+        {!isLoading && applications.length === 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+            No applications found.
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+            Loading applications...
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-2xl border border-white/10 bg-white/5 md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-left">
             <thead className="bg-white/5">
@@ -299,7 +413,11 @@ export default function AdminApplicationsPage() {
                       {application.license_number || '—'}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-300">
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] ${getStatusBadgeClass(
+                          application.status
+                        )}`}
+                      >
                         {application.status || 'unknown'}
                       </span>
                     </td>
