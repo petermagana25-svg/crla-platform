@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function OnboardingProfilePage() {
-  redirect('/onboarding');
+export default function OnboardingProfileRedirectPage() {
+  redirect('/profile');
 }

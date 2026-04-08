@@ -31,6 +31,7 @@ import {
 import Navbar from "@/components/layout/Navbar";
 import Container from "@/components/layout/Container";
 import ChangePasswordSection from "@/components/dashboard/ChangePasswordSection";
+import { getStableBrowserUser } from "@/lib/get-stable-browser-user";
 import { getCurrentUserRoleClient } from "@/lib/get-current-user-role-client";
 import { computeAgentStatus } from "@/lib/agent-status";
 import {
@@ -532,12 +533,15 @@ export default function AgentDashboardPage() {
   const [profileViewCount, setProfileViewCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (options?: { isActive?: () => boolean }) => {
+    const isActive = options?.isActive ?? (() => true);
     setIsLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getStableBrowserUser();
+
+    if (!isActive()) {
+      return;
+    }
 
     if (!user) {
       router.replace("/login");
@@ -561,11 +565,10 @@ export default function AgentDashboardPage() {
       ]);
 
     const agentAccess = (agentAccessRaw as AgentAccess | null) ?? null;
-    console.log("agent fetch", {
-      source: "dashboard",
-      userId: user.id,
-      found: Boolean(agentAccess),
-    });
+
+    if (!isActive()) {
+      return;
+    }
 
     if (agentAccessError) {
       setAgentLookupError(
@@ -663,6 +666,11 @@ export default function AgentDashboardPage() {
           membership_status: preferredMembership?.status ?? "pending",
         })
       : null;
+
+    if (!isActive()) {
+      return;
+    }
+
     setAgentAccess(agentAccess);
     setIsAdmin(admin);
     setAgentLookupError(null);
@@ -689,8 +697,16 @@ export default function AgentDashboardPage() {
   }, [router]);
 
   useEffect(() => {
+    let isActive = true;
+
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadDashboard();
+    void loadDashboard({
+      isActive: () => isActive,
+    });
+
+    return () => {
+      isActive = false;
+    };
   }, [loadDashboard]);
 
   async function handleLogout() {
@@ -700,7 +716,7 @@ export default function AgentDashboardPage() {
 
   function handleOpenProfileSettings() {
     setViewMode("agent");
-    router.push("/onboarding");
+    router.push("/profile");
   }
 
   function handleDashboardReset() {
@@ -933,7 +949,7 @@ export default function AgentDashboardPage() {
                       icon={<User size={18} />}
                       label="Profile Settings"
                       onClick={handleOpenProfileSettings}
-                      activePaths={["/onboarding"]}
+                      activePaths={["/profile"]}
                       exactMatch
                       tone="account"
                     />

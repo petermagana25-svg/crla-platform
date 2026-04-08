@@ -4,14 +4,30 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { getPostAuthRedirectPathClient } from '@/lib/get-post-auth-redirect-path-client';
+import {
+  clearPasswordSetupGrant,
+  hasValidPasswordSetupGrant,
+  readPasswordSetupGrant,
+  readPasswordSetupLinkContext,
+  storePasswordSetupGrant,
+  type PasswordSetupVariant,
+} from '@/lib/password-setup';
 import { supabase } from '@/lib/supabase';
 
 type PasswordSetupFormProps = {
   eyebrow: string;
   title: string;
   description: string;
-  variant: 'invite' | 'recovery';
+  variant: PasswordSetupVariant;
 };
+
+type SetupStatus = 'loading' | 'invalid' | 'ready' | 'submitting' | 'success';
+
+const WAIT_FOR_SESSION_MS = 4000;
+const WAIT_INTERVAL_MS = 150;
+const SESSION_RETRY_LIMIT = 5;
+const SESSION_RETRY_DELAY_MS = 100;
 
 export default function PasswordSetupForm({
   eyebrow,
@@ -24,92 +40,159 @@ export default function PasswordSetupForm({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isReady, setIsReady] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<SetupStatus>('loading');
   const [linkError, setLinkError] = useState<string | null>(null);
-  const [resolvedVariant, setResolvedVariant] = useState<'invite' | 'recovery'>(
-    variant
-  );
+  const [resolvedVariant, setResolvedVariant] =
+    useState<PasswordSetupVariant>(variant);
   const [message, setMessage] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
+  const copy = readPasswordSetupCopy(resolvedVariant, {
+    eyebrow,
+    title,
+    description,
+  });
 
   const canSubmit = useMemo(() => {
     return (
-      isReady &&
-      !loading &&
+      status === 'ready' &&
       password.trim().length >= 8 &&
       confirmPassword.trim().length >= 8
     );
-  }, [confirmPassword, isReady, loading, password]);
-
-  async function loadSessionState() {
-    const currentUrl = new URL(window.location.href);
-    const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
-    const searchParams = currentUrl.searchParams;
-    const authType = searchParams.get('type') || hashParams.get('type');
-    const nextVariant = authType === 'recovery' ? 'recovery' : variant;
-    const errorDescription =
-      searchParams.get('error_description') ||
-      hashParams.get('error_description');
-    const errorCode =
-      searchParams.get('error_code') || hashParams.get('error_code');
-    const hasAuthMarkers =
-      hashParams.has('access_token') ||
-      hashParams.has('type') ||
-      searchParams.has('type');
-
-    setResolvedVariant(nextVariant);
-
-    if (errorDescription || errorCode) {
-      setLinkError(readLinkErrorMessage(errorDescription, errorCode, nextVariant));
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    setIsReady(Boolean(session));
-
-    if (session) {
-      setLinkError(null);
-      return;
-    }
-
-    if (!hasAuthMarkers && !errorDescription && !errorCode) {
-      router.replace('/login');
-    }
-  }
+  }, [confirmPassword, password, status]);
 
   useEffect(() => {
-    void loadSessionState();
+    let isActive = true;
+
+    const syncPasswordSetupState = async () => {
+      const currentUrl = new URL(window.location.href);
+      const context = readPasswordSetupLinkContext(variant, currentUrl);
+
+      setResolvedVariant(context.variant);
+      setStatus('loading');
+      setMessage(null);
+
+      if (context.errorCode || context.errorDescription) {
+        clearPasswordSetupGrant();
+
+        if (isActive) {
+          const nextVariant = context.variant;
+
+          setResolvedVariant(nextVariant);
+          setLinkError(
+            readLinkErrorMessage(
+              context.errorDescription,
+              context.errorCode,
+              nextVariant
+            )
+          );
+          setStatus('invalid');
+        }
+
+        return;
+      }
+
+      const {
+        data: { session: initialSession },
+      } = await supabase.auth.getSession();
+      const setupGrant = readPasswordSetupGrant(context.variant);
+
+      if (context.hasAuthMarkers) {
+        const linkedSession = await waitForAuthLinkSession(
+          initialSession?.access_token ?? null
+        );
+
+        if (!linkedSession?.user?.id) {
+          clearPasswordSetupGrant();
+
+          if (isActive) {
+            setLinkError(readLinkErrorMessage(null, null, context.variant));
+            setStatus('invalid');
+          }
+
+          return;
+        }
+
+        storePasswordSetupGrant(context.variant, linkedSession.user.id);
+
+        if (isActive) {
+          setLinkError(null);
+          setStatus('ready');
+        }
+
+        return;
+      }
+
+      const session =
+        initialSession?.user?.id && hasValidPasswordSetupGrant(
+          context.variant,
+          initialSession.user.id
+        )
+          ? initialSession
+          : setupGrant
+            ? await waitForRecoverySession()
+            : initialSession;
+      const hasGrant = hasValidPasswordSetupGrant(
+        context.variant,
+        session?.user?.id
+      );
+
+      if (session?.user?.id && hasGrant) {
+        if (isActive) {
+          setLinkError(null);
+          setStatus('ready');
+        }
+
+        return;
+      }
+
+      clearPasswordSetupGrant();
+
+      if (isActive) {
+        setLinkError(
+          setupGrant
+            ? 'Recovery session not established. Please retry.'
+            : readMissingLinkMessage(context.variant)
+        );
+        setStatus('invalid');
+      }
+    };
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsReady(Boolean(session));
+      if (!isActive || !session?.user?.id) {
+        return;
+      }
 
-      if (session) {
+      const currentUrl = new URL(window.location.href);
+      const context = readPasswordSetupLinkContext(variant, currentUrl);
+
+      setResolvedVariant(context.variant);
+
+      if (context.hasAuthMarkers) {
+        storePasswordSetupGrant(context.variant, session.user.id);
+      }
+
+      if (
+        context.hasAuthMarkers ||
+        hasValidPasswordSetupGrant(context.variant, session.user.id)
+      ) {
         setLinkError(null);
+        setStatus((currentStatus) =>
+          currentStatus === 'submitting' ? currentStatus : 'ready'
+        );
       }
     });
 
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void syncPasswordSetupState();
 
-  useEffect(() => {
-    if (!linkError || isReady) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      router.replace('/login');
-    }, 3000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isReady, linkError, router]);
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
+  }, [variant]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -125,20 +208,32 @@ export default function PasswordSetupForm({
     if (password !== confirmPassword) {
       setMessage({
         type: 'error',
-        text: 'Passwords do not match.',
+        text: 'Passwords do not match. Re-enter both fields to continue.',
       });
       return;
     }
 
-    setLoading(true);
+    setStatus('submitting');
     setMessage(null);
+
+    const session = await waitForRecoverySession();
+
+    if (!session) {
+      setStatus('ready');
+      setLinkError('Recovery session not established. Please retry.');
+      setMessage({
+        type: 'error',
+        text: 'Session not ready. Please wait or retry.',
+      });
+      return;
+    }
 
     const { error } = await supabase.auth.updateUser({
       password,
     });
 
     if (error) {
-      setLoading(false);
+      setStatus('ready');
       setLinkError(readPasswordUpdateError(error.message, resolvedVariant));
       setMessage({
         type: 'error',
@@ -150,17 +245,22 @@ export default function PasswordSetupForm({
       return;
     }
 
-    console.log('password updated', {
-      variant: resolvedVariant,
-    });
-
+    clearPasswordSetupGrant();
+    setStatus('success');
     setMessage({
       type: 'success',
-      text: 'Password updated. Redirecting...',
+      text:
+        resolvedVariant === 'invite'
+          ? 'Your password has been set. Redirecting...'
+          : 'Your password has been updated. Redirecting...',
     });
 
-    window.location.href = '/dashboard';
+    const redirectTo = await getPostAuthRedirectPathClient();
+    router.replace(redirectTo);
   }
+
+  const isReady = status === 'ready' || status === 'submitting' || status === 'success';
+  const isSaving = status === 'submitting';
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[var(--navy-dark)] text-white">
@@ -174,29 +274,30 @@ export default function PasswordSetupForm({
           <div className="mb-6 text-center">
             <div className="inline-flex items-center gap-2 text-xs text-[var(--gold-main)]">
               <ShieldCheck size={14} />
-              {eyebrow}
+              {copy.eyebrow}
             </div>
-            <h1 className="mt-4 text-3xl font-bold">{title}</h1>
-            <p className="mt-2 text-sm text-white/50">{description}</p>
+            <h1 className="mt-4 text-3xl font-bold">{copy.title}</h1>
+            <p className="mt-2 text-sm text-white/50">{copy.description}</p>
           </div>
 
-          {!isReady ? (
+          {status === 'loading' ? (
             <div className="space-y-4">
-              <div
-                className={`rounded-2xl px-4 py-4 text-sm ${
-                  linkError
-                    ? 'border border-red-400/30 bg-red-400/10 text-red-200'
-                    : 'border border-white/10 bg-white/5 text-white/70'
-                }`}
-              >
-                {linkError ||
-                  'Use the secure link from your email to open this page and start your password setup.'}
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/70">
+                {copy.loadingMessage}
+              </div>
+            </div>
+          ) : !isReady ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-4 text-sm text-red-200">
+                {linkError}
               </div>
               <Link
                 href="/login"
                 className="inline-flex w-full items-center justify-center rounded-full bg-[var(--gold-main)] py-4 font-semibold text-black transition hover:bg-[var(--gold-soft)]"
               >
-                Back to Login
+                {resolvedVariant === 'invite'
+                  ? 'Back to Login'
+                  : 'Request Another Reset'}
               </Link>
             </div>
           ) : (
@@ -207,7 +308,7 @@ export default function PasswordSetupForm({
                   type={showPassword ? 'text' : 'password'}
                   required
                   minLength={8}
-                  placeholder="New password"
+                  placeholder={copy.passwordPlaceholder}
                   className="w-full bg-transparent outline-none"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -226,7 +327,7 @@ export default function PasswordSetupForm({
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
                   minLength={8}
-                  placeholder="Confirm password"
+                  placeholder={copy.confirmPasswordPlaceholder}
                   className="w-full bg-transparent outline-none"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
@@ -262,13 +363,13 @@ export default function PasswordSetupForm({
                 disabled={!canSubmit}
                 className="w-full rounded-full bg-[var(--gold-main)] py-4 font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? (
+                {isSaving ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="animate-spin" />
-                    Saving your password...
+                    {copy.submittingLabel}
                   </span>
                 ) : (
-                  'Save Password'
+                  copy.submitLabel
                 )}
               </button>
             </form>
@@ -279,10 +380,109 @@ export default function PasswordSetupForm({
   );
 }
 
+async function waitForAuthLinkSession(initialAccessToken: string | null) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < WAIT_FOR_SESSION_MS) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.access_token) {
+      if (!initialAccessToken || session.access_token !== initialAccessToken) {
+        return session;
+      }
+    }
+
+    const currentUrl = new URL(window.location.href);
+    const context = readPasswordSetupLinkContext('invite', currentUrl);
+
+    if (!context.hasAuthMarkers) {
+      break;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, WAIT_INTERVAL_MS));
+  }
+
+  return null;
+}
+
+function readMissingLinkMessage(variant: PasswordSetupVariant) {
+  return variant === 'invite'
+    ? 'This secure setup page only works from a valid invite or activation email. Ask an admin to send you a fresh link.'
+    : 'This secure reset page only works from a valid password reset email. Request a new reset link from the login page.';
+}
+
+function readPasswordSetupCopy(
+  variant: PasswordSetupVariant,
+  fallbackCopy: Pick<PasswordSetupFormProps, 'eyebrow' | 'title' | 'description'>
+) {
+  if (variant === 'recovery') {
+    return {
+      confirmPasswordPlaceholder: 'Confirm new password',
+      description:
+        'Enter your new password below to finish the secure recovery flow and regain access to your account.',
+      eyebrow: 'PASSWORD RESET',
+      loadingMessage: 'Preparing secure reset...',
+      passwordPlaceholder: 'New password',
+      submitLabel: 'Update Password',
+      submittingLabel: 'Updating your password...',
+      title: 'Reset Your Password',
+    };
+  }
+
+  if (variant === 'invite') {
+    return {
+      confirmPasswordPlaceholder: 'Confirm password',
+      description:
+        'Create your password to activate your account and continue into the CRLA platform.',
+      eyebrow: 'ACCOUNT SETUP',
+      loadingMessage: 'Preparing secure account setup...',
+      passwordPlaceholder: 'Create password',
+      submitLabel: 'Set Password',
+      submittingLabel: 'Setting your password...',
+      title: 'Create Your Password',
+    };
+  }
+
+  return {
+    confirmPasswordPlaceholder: 'Confirm password',
+    description: fallbackCopy.description,
+    eyebrow: fallbackCopy.eyebrow,
+    loadingMessage: 'Preparing secure reset...',
+    passwordPlaceholder: 'New password',
+    submitLabel: 'Save Password',
+    submittingLabel: 'Saving your password...',
+    title: fallbackCopy.title,
+  };
+}
+
+async function waitForRecoverySession() {
+  let attempts = 0;
+  let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] =
+    null;
+
+  while (attempts < SESSION_RETRY_LIMIT && !session) {
+    const {
+      data: { session: nextSession },
+    } = await supabase.auth.getSession();
+    session = nextSession;
+
+    if (!session) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, SESSION_RETRY_DELAY_MS)
+      );
+      attempts += 1;
+    }
+  }
+
+  return session;
+}
+
 function readLinkErrorMessage(
   errorDescription: string | null,
   errorCode: string | null,
-  variant: 'invite' | 'recovery'
+  variant: PasswordSetupVariant
 ) {
   const normalizedDescription = errorDescription?.toLowerCase() ?? '';
   const normalizedCode = errorCode?.toLowerCase() ?? '';
@@ -312,7 +512,7 @@ function readLinkErrorMessage(
 
 function readPasswordUpdateError(
   message: string,
-  variant: 'invite' | 'recovery'
+  variant: PasswordSetupVariant
 ) {
   const normalizedMessage = message.toLowerCase();
 

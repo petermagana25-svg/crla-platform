@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { refreshAgentActivationStatus } from '@/lib/agent-activation';
+import { buildPasswordSetupRedirectUrl } from '@/lib/password-setup';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { apiError, getUserByEmail, requireAdmin } from '../_utils';
 
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
       }
 
       const existingUser = await getUserByEmail(admin, email);
-      const redirectTo = `${redirectBaseUrl}/set-password`;
       const approvedUserMetadata = {
         full_name: fullName,
         role: 'agent',
@@ -122,6 +122,9 @@ export async function POST(request: Request) {
       let authUserId: string | null = existingUser?.id ?? null;
 
       if (existingUser) {
+        inviteMode = 'recovery';
+        const redirectTo = `${redirectBaseUrl}/auth/callback?mode=recovery`;
+
         console.log('USER FOUND IN AUTH', {
           email,
           authUserId: existingUser.id,
@@ -163,12 +166,16 @@ export async function POST(request: Request) {
           );
         }
 
-        inviteMode = 'recovery';
         console.log('RESET EMAIL SENT', {
           email,
           authUserId: existingUser.id,
         });
       } else {
+        const redirectTo = buildPasswordSetupRedirectUrl(
+          redirectBaseUrl,
+          inviteMode
+        );
+
         console.log('USER NOT FOUND IN AUTH', {
           email,
         });
@@ -200,6 +207,11 @@ export async function POST(request: Request) {
           authUserId,
         });
       }
+
+      const redirectTo = buildPasswordSetupRedirectUrl(
+        redirectBaseUrl,
+        inviteMode
+      );
 
       console.info('[admin-approve] link generated', {
         applicationId,

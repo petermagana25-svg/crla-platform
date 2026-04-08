@@ -8,7 +8,7 @@ import Navbar from "@/components/layout/Navbar";
 
 const supportRoutes = [
   {
-    href: "/onboarding/profile",
+    href: "/profile",
     icon: <UserRound size={18} />,
     title: "Profile settings",
     description: "Update your agent details, licensing info, and public-facing profile.",

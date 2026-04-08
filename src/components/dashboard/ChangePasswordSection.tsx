@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { Loader2, Lock } from 'lucide-react';
+import { getStableBrowserUser } from '@/lib/get-stable-browser-user';
 import { supabase } from '@/lib/supabase';
 
 export default function ChangePasswordSection() {
@@ -43,6 +44,30 @@ export default function ChangePasswordSection() {
     setIsSaving(true);
     setMessage(null);
 
+    const user = await getStableBrowserUser();
+
+    if (!user) {
+      setIsSaving(false);
+      setMessage({
+        type: 'error',
+        text: 'You must be signed in to change your password.',
+      });
+      return;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setIsSaving(false);
+      setMessage({
+        type: 'error',
+        text: 'Your session is not ready. Please retry in a moment.',
+      });
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       password,
     });
@@ -55,10 +80,6 @@ export default function ChangePasswordSection() {
       });
       return;
     }
-
-    console.log('password updated', {
-      source: 'dashboard',
-    });
 
     setPassword('');
     setConfirmPassword('');

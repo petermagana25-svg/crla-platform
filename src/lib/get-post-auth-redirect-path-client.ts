@@ -1,9 +1,32 @@
+import {
+  isPasswordSetupMode,
+  isPublicAuthRoute,
+} from '@/lib/public-auth-routes';
 import { getViewMode } from '@/lib/view-mode';
 
-export async function getPostAuthRedirectPathClient() {
+type GetPostAuthRedirectPathClientOptions = {
+  preserveSetPasswordPath?: boolean;
+};
+
+export async function getPostAuthRedirectPathClient(
+  options: GetPostAuthRedirectPathClientOptions = {}
+) {
   try {
-    if (typeof window !== 'undefined' && window.location.pathname === '/set-password') {
-      return '/set-password';
+    if (typeof window !== 'undefined') {
+      const currentUrl = new URL(window.location.href);
+      const pathname = currentUrl.pathname;
+      const mode = currentUrl.searchParams.get('mode');
+
+      if (
+        isPublicAuthRoute(pathname) &&
+        (options.preserveSetPasswordPath ||
+          pathname === '/auth/callback' ||
+          isPasswordSetupMode(mode))
+      ) {
+        return pathname === '/set-password' && isPasswordSetupMode(mode)
+          ? `/set-password?mode=${mode}`
+          : pathname;
+      }
     }
 
     const response = await fetch('/api/auth/access-state', {

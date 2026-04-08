@@ -50,12 +50,6 @@ export async function getCurrentUserAccessState(): Promise<CurrentUserAccessStat
     .eq('user_id', user.id)
     .maybeSingle();
 
-  console.log('agent fetch', {
-    source: 'getCurrentUserAccessState',
-    userId: user.id,
-    found: Boolean(agent),
-  });
-
   const role = (agent?.role as UserRole | undefined) ?? null;
 
   return {

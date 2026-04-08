@@ -87,26 +87,25 @@ export default function LoginPage() {
     setFeedback(null);
     setIsSendingResetEmail(true);
 
-    const redirectBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-
-    if (!redirectBaseUrl) {
-      setIsSendingResetEmail(false);
-      setFeedback({
-        type: "error",
-        text: "Password reset is temporarily unavailable.",
-      });
-      return;
-    }
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${redirectBaseUrl}/set-password`,
+    const response = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+      }),
     });
 
-    if (error) {
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
       setIsSendingResetEmail(false);
       setFeedback({
         type: "error",
-        text: error.message || "Could not send reset link.",
+        text: result?.error || "Could not send reset link.",
       });
       return;
     }
