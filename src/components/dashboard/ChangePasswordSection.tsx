@@ -91,16 +91,16 @@ export default function ChangePasswordSection() {
   }
 
   return (
-    <section className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
-      <div className="flex items-start justify-between gap-4">
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] backdrop-blur-2xl sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.22em] text-white/40">
             Security
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
+          <h2 className="mt-2 text-xl font-semibold text-white sm:text-2xl">
             Change Password
           </h2>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-muted)]">
             Update your dashboard password securely through Supabase Auth.
           </p>
         </div>
@@ -124,23 +124,23 @@ export default function ChangePasswordSection() {
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-5 md:grid-cols-2">
         <label className="block text-sm">
-          <span className="mb-2 block text-white/75">New Password</span>
+          <span className="mb-2 block text-sm font-medium text-white/80">New Password</span>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none transition focus:border-[var(--gold-main)]/40"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3.5 text-base text-white outline-none transition focus:border-[var(--gold-main)]/40"
             placeholder="New password"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="mb-2 block text-white/75">Confirm Password</span>
+          <span className="mb-2 block text-sm font-medium text-white/80">Confirm Password</span>
           <input
             type="password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none transition focus:border-[var(--gold-main)]/40"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3.5 text-base text-white outline-none transition focus:border-[var(--gold-main)]/40"
             placeholder="Confirm password"
           />
         </label>
@@ -149,7 +149,7 @@ export default function ChangePasswordSection() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="tap-feedback inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3.5 text-base font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving ? (
               <>

@@ -47,6 +47,7 @@ export default function ProfilePage() {
   const [formValues, setFormValues] =
     useState<ProfileSettingsFormValues>(emptyFormValues);
   const [fullName, setFullName] = useState<string | null>(null);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
   const [isAvatarBucketReady, setIsAvatarBucketReady] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -210,10 +211,12 @@ export default function ProfilePage() {
 
     setAvatarMessage(null);
     setIsAvatarUploading(true);
+    setAvatarUploadProgress(12);
 
     const user = await getStableBrowserUser();
 
     if (!user) {
+      setAvatarUploadProgress(0);
       setIsAvatarUploading(false);
       router.replace('/login');
       return;
@@ -222,10 +225,12 @@ export default function ProfilePage() {
     const bucketReady = await ensureAvatarBucket();
 
     if (!bucketReady) {
+      setAvatarUploadProgress(0);
       setIsAvatarUploading(false);
       return;
     }
 
+    setAvatarUploadProgress(32);
     const extension = avatarMimeTypeToExtension[file.type] ?? 'jpg';
     const filePath = `${user.id}.${extension}`;
 
@@ -238,6 +243,7 @@ export default function ProfilePage() {
       });
 
     if (uploadError) {
+      setAvatarUploadProgress(0);
       setIsAvatarUploading(false);
       setAvatarMessage({
         type: 'error',
@@ -246,6 +252,7 @@ export default function ProfilePage() {
       return;
     }
 
+    setAvatarUploadProgress(76);
     const {
       data: { publicUrl },
     } = supabase.storage.from('avatars').getPublicUrl(filePath);
@@ -262,6 +269,7 @@ export default function ProfilePage() {
     );
 
     if (profileUpdateError) {
+      setAvatarUploadProgress(0);
       setIsAvatarUploading(false);
       setAvatarMessage({
         type: 'error',
@@ -272,6 +280,7 @@ export default function ProfilePage() {
       return;
     }
 
+    setAvatarUploadProgress(100);
     setAvatarUrl(publicAvatarUrl);
     setIsAvatarUploading(false);
     setAvatarMessage({
@@ -357,7 +366,9 @@ export default function ProfilePage() {
           avatarUrl={avatarUrl}
           feedback={avatarMessage}
           fullName={fullName}
+          isLoading={isBootstrapping}
           isDisabled={isBootstrapping || isSubmitting}
+          progress={avatarUploadProgress}
           isUploading={isAvatarUploading}
           onFileChange={handleAvatarChange}
         />

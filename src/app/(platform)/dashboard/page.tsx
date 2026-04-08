@@ -118,7 +118,7 @@ type SidebarItemProps = {
 type ActivationStepStatus = "completed" | "in_progress" | "pending";
 
 const subtleHeaderButtonClass =
-  "inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
 
 // TODO: Wire certification and training progress to real member progress data.
 const progressCards = [
@@ -295,13 +295,13 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08] hover:shadow-[0_20px_50px_rgba(0,0,0,.28)]">
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08] hover:shadow-[0_20px_50px_rgba(0,0,0,.28)] sm:p-6">
       <div className="mb-4 inline-flex rounded-2xl bg-[rgba(212,175,55,0.10)] p-3 text-[var(--gold-main)]">
         {icon}
       </div>
       <p className="text-sm text-white/55">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
-      <p className="mt-2 text-sm text-[var(--text-muted)]">{detail}</p>
+      <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">{value}</p>
+      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{detail}</p>
     </div>
   );
 }
@@ -318,7 +318,7 @@ function ProgressCard({
   note: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition duration-300 hover:bg-white/[0.08]">
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl transition duration-300 hover:bg-white/[0.08] sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-white/55">{title}</p>
@@ -336,7 +336,7 @@ function ProgressCard({
         />
       </div>
 
-      <p className="mt-3 text-sm text-[var(--text-muted)]">{note}</p>
+      <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">{note}</p>
     </div>
   );
 }
@@ -349,7 +349,7 @@ function AchievementBadge({
   subtitle: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08]">
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-center backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08]">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgba(212,175,55,0.12)] text-[var(--gold-main)]">
         <Award size={22} />
       </div>
@@ -371,7 +371,7 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-medium text-white/80 backdrop-blur transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08] hover:text-white"
+      className="flex min-h-[56px] w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-medium text-white/80 backdrop-blur transition duration-300 hover:-translate-y-1 hover:bg-white/[0.08] hover:text-white"
     >
       <span className="flex items-center gap-3">
         <span className="text-[var(--gold-main)]">{icon}</span>
@@ -495,7 +495,7 @@ function ActivationStepCard({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl transition duration-300 hover:-translate-y-[1px] hover:bg-white/[0.08]"
+      className="flex min-h-[56px] items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl transition duration-300 hover:-translate-y-[1px] hover:bg-white/[0.08]"
     >
       <div className="inline-flex rounded-xl bg-[rgba(212,175,55,0.10)] p-2.5 text-[var(--gold-main)]">
         {icon}
@@ -809,13 +809,13 @@ export default function AgentDashboardPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-[var(--navy-dark)] text-white">
+    <main className="platform-safe-bottom min-h-screen bg-[var(--navy-dark)] text-white">
       <Navbar />
 
       <Container>
-        <div className="py-10 lg:py-14">
-          <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="space-y-6">
+        <div className="platform-fade-in py-6 sm:py-8 lg:py-12">
+          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8">
+            <aside className="hidden space-y-6 lg:block">
               <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_25px_70px_rgba(0,0,0,.28)]">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
@@ -984,14 +984,14 @@ export default function AgentDashboardPage() {
               </div>
             </aside>
 
-            <section className="space-y-8">
+            <section className="space-y-6 lg:space-y-8">
               {agentLookupError && (
                 <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
                   {agentLookupError}
                 </div>
               )}
 
-              <div className="rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-8 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl">
+              <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-5 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl sm:p-6 lg:rounded-[36px] lg:p-8">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-sm uppercase tracking-[0.22em] text-white/40">
@@ -1002,23 +1002,23 @@ export default function AgentDashboardPage() {
                         <div className="h-10 w-56 animate-pulse rounded-full bg-white/10 md:h-12 md:w-72" />
                       </div>
                     ) : (
-                      <h1 className="mt-3 text-4xl font-bold md:text-5xl">
+                      <h1 className="mt-3 text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">
                         {heroHeading}
                       </h1>
                     )}
 
-                    <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--text-muted)]">
+                    <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--text-muted)] sm:text-lg sm:leading-8">
                       Track your exposure, grow your professional profile, access
                       training, and monitor how the platform is helping your
                       business.
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start lg:justify-end">
                     {isActiveAgent ? (
                       <Link
                         href="/dashboard/listings/new"
-                        className="inline-flex items-center gap-2 rounded-full bg-[var(--gold-main)] px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)]"
+                        className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] sm:w-auto"
                       >
                         <PlusCircle size={16} />
                         Add Listing
@@ -1051,13 +1051,82 @@ export default function AgentDashboardPage() {
                 </div>
               </div>
 
-              <div className="rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),rgba(255,255,255,0.03))] p-4 shadow-[0_18px_45px_rgba(0,0,0,.18)] backdrop-blur-2xl">
+              <div className="grid gap-3 lg:hidden">
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-[0_22px_60px_rgba(0,0,0,.24)] backdrop-blur-2xl">
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      {isLoading ? (
+                        <div className="h-full w-full animate-pulse rounded-2xl bg-white/10" />
+                      ) : profile?.avatar_url ? (
+                        <div className="relative h-full w-full">
+                          <Image
+                            src={profile.avatar_url}
+                            alt={profileName ? `${profileName} profile photo` : "Profile photo"}
+                            fill
+                            className="object-cover"
+                            sizes="56px"
+                          />
+                        </div>
+                      ) : profileInitials ? (
+                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,rgba(212,175,55,0.18),rgba(255,255,255,0.06))] text-base font-semibold tracking-[0.14em] text-[var(--gold-main)]">
+                          {profileInitials}
+                        </div>
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-white/5 text-white/35">
+                          <User size={22} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+                        Certified Agent
+                      </p>
+                      <p className="mt-1 truncate text-lg font-semibold text-white">
+                        {profileName || "Your Dashboard"}
+                      </p>
+                      <p className="mt-1 text-sm text-white/50">{locationLabel}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Link
+                    href="/profile"
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Profile Settings
+                  </Link>
+                  <Link
+                    href="/dashboard/billing"
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Membership
+                  </Link>
+                  <Link
+                    href="/dashboard/help"
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Support
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isLoggingOut ? "Logging out..." : "Logout"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),rgba(255,255,255,0.03))] p-4 shadow-[0_18px_45px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p className="text-sm uppercase tracking-[0.22em] text-white/45">
                       Activation Progress
                     </p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">
+                    <h2 className="mt-2 text-lg font-semibold text-white sm:text-xl">
                       Become a Certified CRLA Agent
                     </h2>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
@@ -1067,7 +1136,7 @@ export default function AgentDashboardPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-right">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:text-right">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
                       Progress
                     </p>
@@ -1102,7 +1171,7 @@ export default function AgentDashboardPage() {
                 </div>
               </div>
 
-              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {dashboardMetricCards.map((card) => (
                   <MetricCard
                     key={card.title}
@@ -1115,11 +1184,11 @@ export default function AgentDashboardPage() {
               </div>
 
               <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">Growth Tracker</h2>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      <h2 className="text-xl font-semibold sm:text-2xl">Growth Tracker</h2>
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                         Strengthen your visibility, credibility, and client
                         response performance.
                       </p>
@@ -1142,11 +1211,11 @@ export default function AgentDashboardPage() {
                   </div>
                 </div>
 
-                <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),rgba(255,255,255,0.04))] p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),rgba(255,255,255,0.04))] p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <p className="text-sm uppercase tracking-[0.2em] text-white/45">
                     Certification Path
                   </p>
-                  <h2 className="mt-3 text-2xl font-semibold">
+                  <h2 className="mt-3 text-xl font-semibold sm:text-2xl">
                     Gold Certified Member
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
@@ -1172,7 +1241,7 @@ export default function AgentDashboardPage() {
 
                   <Link
                     href="#"
-                    className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition duration-300 hover:bg-white/10"
+                    className="mt-6 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition duration-300 hover:bg-white/10 sm:w-auto"
                   >
                     View Certification Details
                     <ArrowRight size={16} />
@@ -1183,11 +1252,11 @@ export default function AgentDashboardPage() {
               <ChangePasswordSection />
 
               <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-                <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">New in Academy</h2>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      <h2 className="text-xl font-semibold sm:text-2xl">New in Academy</h2>
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                         Fresh training materials and operating guidance for your
                         next session.
                       </p>
@@ -1255,11 +1324,11 @@ export default function AgentDashboardPage() {
                   </div>
                 </div>
 
-                <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">Achievements</h2>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      <h2 className="text-xl font-semibold sm:text-2xl">Achievements</h2>
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                         Recognition that strengthens your public credibility.
                       </p>
                     </div>
@@ -1279,20 +1348,20 @@ export default function AgentDashboardPage() {
               </div>
 
               <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">
+                      <h2 className="text-xl font-semibold sm:text-2xl">
                         Latest Marketing Assets
                       </h2>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                         The newest branded downloads ready to share, post, and
                         present.
                       </p>
                     </div>
                     <Link
                       href="/dashboard/marketing-assets"
-                      className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 sm:w-auto"
                     >
                       View all assets
                     </Link>
@@ -1361,13 +1430,13 @@ export default function AgentDashboardPage() {
                   </div>
                 </div>
 
-                <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.94),rgba(11,20,38,0.92))] p-7 backdrop-blur-2xl">
+                <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.94),rgba(11,20,38,0.92))] p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">
+                      <h2 className="text-xl font-semibold sm:text-2xl">
                         Billing & Membership
                       </h2>
-                      <p className="mt-2 text-sm text-[var(--text-muted)]">
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                         Track plan status, membership validity, and billing
                         history from one place.
                       </p>
@@ -1442,17 +1511,17 @@ export default function AgentDashboardPage() {
                 </div>
               </div>
 
-              <div className="rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl">
+              <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl sm:p-6 lg:p-7">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-semibold">Recent Listings</h2>
-                    <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    <h2 className="text-xl font-semibold sm:text-2xl">Recent Listings</h2>
+                    <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                       Your latest renovation listings and projected readiness.
                     </p>
                   </div>
                   <Link
                     href="/dashboard/listings"
-                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 sm:w-auto"
                   >
                     View All
                   </Link>

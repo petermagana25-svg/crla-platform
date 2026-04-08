@@ -9,7 +9,7 @@ export default function BadgeLogo() {
         width={220}
         height={70}
         priority
-        className="h-auto w-auto max-h-14 object-contain"
+        className="h-auto w-auto max-h-10 object-contain sm:max-h-12 md:max-h-14"
       />
     </div>
   );

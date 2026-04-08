@@ -11,7 +11,9 @@ type ProfileAvatarSectionProps = {
     type: 'error' | 'success';
   } | null;
   fullName: string | null;
+  isLoading?: boolean;
   isDisabled?: boolean;
+  progress?: number;
   isUploading: boolean;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
 };
@@ -33,16 +35,40 @@ export default function ProfileAvatarSection({
   avatarUrl,
   feedback,
   fullName,
+  isLoading = false,
   isDisabled = false,
+  progress = 0,
   isUploading,
   onFileChange,
 }: ProfileAvatarSectionProps) {
   const initials = getInitials(fullName);
 
+  if (isLoading) {
+    return (
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] backdrop-blur-2xl sm:p-6 lg:p-8">
+        <div className="flex flex-col items-center gap-6 text-center sm:text-left">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+            <div className="shimmer-block h-24 w-24 rounded-3xl" />
+            <div className="w-full max-w-sm space-y-3">
+              <div className="shimmer-block h-4 w-28 rounded-full" />
+              <div className="shimmer-block h-7 w-40 rounded-full" />
+              <div className="shimmer-block h-4 w-full rounded-full" />
+              <div className="shimmer-block h-4 w-4/5 rounded-full" />
+            </div>
+          </div>
+
+          <div className="w-full">
+            <div className="shimmer-block h-[52px] w-full rounded-full sm:w-48" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="mb-8 rounded-[28px] border border-white/10 bg-slate-950/40 p-6">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] backdrop-blur-2xl sm:p-6 lg:p-8">
+      <div className="flex flex-col items-center gap-6 text-center sm:text-left">
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
           <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5">
             {avatarUrl ? (
               <Image
@@ -61,7 +87,7 @@ export default function ProfileAvatarSection({
             )}
           </div>
 
-          <div>
+          <div className="space-y-2">
             <p className="text-sm uppercase tracking-[0.18em] text-white/40">
               Profile Photo
             </p>
@@ -75,7 +101,7 @@ export default function ProfileAvatarSection({
           </div>
         </div>
 
-        <div className="sm:text-right">
+        <div className="w-full">
           <input
             id="profile-avatar-upload"
             type="file"
@@ -86,7 +112,7 @@ export default function ProfileAvatarSection({
           />
           <label
             htmlFor="profile-avatar-upload"
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-3 font-semibold transition ${
+            className={`tap-feedback inline-flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-full px-5 py-3 text-base font-semibold transition sm:w-auto ${
               isDisabled || isUploading
                 ? 'cursor-not-allowed bg-white/10 text-white/45'
                 : 'bg-[var(--gold-main)] text-black hover:bg-[var(--gold-soft)]'
@@ -104,6 +130,21 @@ export default function ProfileAvatarSection({
               </>
             )}
           </label>
+
+          {isUploading ? (
+            <div className="mt-4 w-full max-w-sm sm:ml-auto">
+              <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-white/45">
+                <span>Uploading</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[var(--gold-main)] transition-[width] duration-200 ease-out"
+                  style={{ width: `${Math.max(progress, 8)}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
