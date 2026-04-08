@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Archive,
+  ArrowLeft,
   Inbox,
   Loader2,
   Mail,
@@ -215,6 +217,154 @@ function countUnreadConversations(conversations: InboxConversation[]) {
   return conversations.filter((conversation) => conversation.status === "unread").length;
 }
 
+function ConversationListItem({
+  conversation,
+  isSelected,
+  onSelect,
+  showPreviewThread,
+}: {
+  conversation: InboxConversation;
+  isSelected: boolean;
+  onSelect: () => void;
+  showPreviewThread: boolean;
+}) {
+  const previewThread = conversation.messages.slice(-3);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-3xl border p-4 text-left transition duration-300 ${
+        isSelected
+          ? "border-[var(--gold-main)]/40 bg-[rgba(212,175,55,0.12)] shadow-[0_0_0_1px_rgba(212,175,55,0.12),0_16px_40px_rgba(212,175,55,.12)]"
+          : conversation.status === "unread"
+            ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.05))] hover:bg-white/[0.10]"
+            : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:bg-white/[0.08]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            {conversation.status === "unread" ? (
+              <span className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p
+                  className={`pr-2 text-base ${
+                    conversation.status === "unread"
+                      ? "font-semibold text-white"
+                      : "font-medium text-white/85"
+                  }`}
+                >
+                  {conversation.participantLabel}
+                </p>
+                <span className="shrink-0 text-xs text-white/45">
+                  {formatTimestamp(conversation.latestMessage.created_at)}
+                </span>
+              </div>
+
+              {conversation.listingLabel ? (
+                <p className="mt-1 break-words text-xs font-medium uppercase tracking-[0.16em] text-[var(--gold-main)]">
+                  {conversation.listingLabel}
+                </p>
+              ) : null}
+
+              <p
+                className={`mt-2 break-words text-sm leading-6 ${
+                  conversation.status === "unread"
+                    ? "font-medium text-white/88"
+                    : "text-[var(--text-muted)]"
+                }`}
+              >
+                {getMessagePreview(conversation.latestMessage.body)}
+              </p>
+
+              <div className="mt-3 flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${getConversationStatusBadgeClass(
+                    conversation.status
+                  )}`}
+                >
+                  {conversation.status}
+                </span>
+                <span className="text-[11px] uppercase tracking-[0.14em] text-white/35">
+                  {conversation.messages.length} messages
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showPreviewThread ? (
+        <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+          {previewThread.map((message) => (
+            <div
+              key={message.id}
+              className={`rounded-2xl px-3 py-2 text-sm ${
+                message.sender_type === "agent"
+                  ? "bg-black/20 text-white/70"
+                  : "bg-white/5 text-white/88"
+              }`}
+            >
+              <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">
+                {message.sender_type === "agent" ? "Agent" : "Lead"}
+              </p>
+              <p className="mt-1 line-clamp-2 break-words leading-6">{message.body}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function ThreadMessages({
+  messages,
+  mobile,
+}: {
+  messages: ThreadMessage[];
+  mobile: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      {messages.map((message) => (
+        <div
+          key={message.id}
+          className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
+        >
+          <div
+            className={`rounded-3xl ${
+              mobile ? "max-w-[75%] px-4 py-3" : "max-w-[85%] px-5 py-4"
+            } ${
+              message.sender_type === "agent"
+                ? "border border-slate-400/20 bg-[rgba(148,163,184,0.16)] text-white shadow-[0_12px_30px_rgba(148,163,184,0.10)]"
+                : "border border-sky-400/25 bg-[rgba(56,189,248,0.14)] text-white/92 shadow-[0_12px_30px_rgba(56,189,248,0.10)]"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45 sm:text-xs">
+                {message.sender_type === "client" ? (mobile ? "Lead" : "CLIENT MESSAGE") : mobile ? "You" : "AGENT REPLY"}
+              </p>
+              <span className="text-[10px] text-white/35 sm:text-xs">
+                {formatTimestamp(message.created_at)}
+              </span>
+            </div>
+            <p
+              className={`mt-3 break-words whitespace-pre-wrap ${
+                mobile ? "text-sm leading-6" : "text-sm leading-7"
+              }`}
+            >
+              {message.body}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function InboxPage() {
   const router = useRouter();
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -225,8 +375,11 @@ export default function InboxPage() {
   const [replyDraft, setReplyDraft] = useState("");
   const [replySuccessMessage, setReplySuccessMessage] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [isMobileThreadOpen, setIsMobileThreadOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [view, setView] = useState<InboxView>("inbox");
+  const mobileThreadEndRef = useRef<HTMLDivElement | null>(null);
+  const desktopThreadEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -273,10 +426,7 @@ export default function InboxPage() {
       );
 
       const { data: listingData } = listingIds.length
-        ? await supabase
-            .from("listings")
-            .select("id, title, address")
-            .in("id", listingIds)
+        ? await supabase.from("listings").select("id, title, address").in("id", listingIds)
         : { data: [] as ListingReference[] };
 
       const listingsById = ((listingData ?? []) as ListingReference[]).reduce<
@@ -312,11 +462,39 @@ export default function InboxPage() {
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ??
     null;
+  const replyDisabled =
+    !replyDraft.trim() || isReplying || !selectedConversation?.participantEmail;
+  const selectedMessageCount = selectedConversation?.messages.length ?? 0;
 
-  async function handleSelectConversation(conversation: InboxConversation) {
+  useEffect(() => {
+    if (!selectedConversation && isMobileThreadOpen) {
+      setIsMobileThreadOpen(false);
+    }
+  }, [isMobileThreadOpen, selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      return;
+    }
+
+    const endRef = isMobileThreadOpen ? mobileThreadEndRef : desktopThreadEndRef;
+
+    window.requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+  }, [isMobileThreadOpen, selectedConversation, selectedMessageCount]);
+
+  async function handleSelectConversation(
+    conversation: InboxConversation,
+    options?: { openMobileThread?: boolean }
+  ) {
     setSelectedConversationId(conversation.id);
     setActionFeedback(null);
     setReplySuccessMessage(null);
+
+    if (options?.openMobileThread) {
+      setIsMobileThreadOpen(true);
+    }
 
     if (view === "archived" || conversation.status !== "unread") {
       return;
@@ -368,9 +546,7 @@ export default function InboxPage() {
       (conversation) => ({
         ...conversation,
         messages: conversation.messages.map((message) =>
-          message.sender_type === "client"
-            ? { ...message, status: "unread" }
-            : message
+          message.sender_type === "client" ? { ...message, status: "unread" } : message
         ),
         status: "unread",
       })
@@ -409,9 +585,7 @@ export default function InboxPage() {
         (conversation) => ({
           ...conversation,
           messages: conversation.messages.map((message) =>
-            message.sender_type === "client"
-              ? { ...message, status: "read" }
-              : message
+            message.sender_type === "client" ? { ...message, status: "read" } : message
           ),
           status: "read",
         })
@@ -447,6 +621,7 @@ export default function InboxPage() {
     setConversations(nextConversations);
     setSelectedConversationId(nextSelectedConversation?.id ?? null);
     setUnreadCount(countUnreadConversations(nextConversations));
+    setIsMobileThreadOpen(false);
 
     try {
       const response = await fetch("/api/messages/archive", {
@@ -467,9 +642,7 @@ export default function InboxPage() {
         | null;
 
       if (!response.ok || !result?.success) {
-        throw new Error(
-          result?.error?.message || "Unable to archive conversation."
-        );
+        throw new Error(result?.error?.message || "Unable to archive conversation.");
       }
 
       setActionFeedback("Conversation archived");
@@ -477,6 +650,7 @@ export default function InboxPage() {
       setConversations(conversations);
       setSelectedConversationId(conversationToArchive.id);
       setUnreadCount(countUnreadConversations(conversations));
+      setIsMobileThreadOpen(true);
       alert(
         archiveError instanceof Error
           ? archiveError.message
@@ -513,6 +687,7 @@ export default function InboxPage() {
     setReplySuccessMessage(null);
     setConversations(nextConversations);
     setSelectedConversationId(nextSelectedConversation?.id ?? null);
+    setIsMobileThreadOpen(false);
 
     try {
       const response = await fetch("/api/messages/delete", {
@@ -533,15 +708,14 @@ export default function InboxPage() {
         | null;
 
       if (!response.ok || !result?.success) {
-        throw new Error(
-          result?.error?.message || "Unable to delete conversation."
-        );
+        throw new Error(result?.error?.message || "Unable to delete conversation.");
       }
 
       setActionFeedback("Conversation deleted permanently");
     } catch (deleteError) {
       setConversations(previousConversations);
       setSelectedConversationId(conversationToDelete.id);
+      setIsMobileThreadOpen(true);
       alert(
         deleteError instanceof Error
           ? deleteError.message
@@ -618,9 +792,7 @@ export default function InboxPage() {
           return {
             ...conversation,
             latestMessage,
-            messages: nextMessages.sort((a, b) =>
-              a.created_at.localeCompare(b.created_at)
-            ),
+            messages: nextMessages.sort((a, b) => a.created_at.localeCompare(b.created_at)),
             status: "replied",
           };
         }
@@ -632,9 +804,7 @@ export default function InboxPage() {
       setReplyDraft("");
     } catch (replyError) {
       alert(
-        replyError instanceof Error
-          ? replyError.message
-          : "Unable to send reply."
+        replyError instanceof Error ? replyError.message : "Unable to send reply."
       );
     } finally {
       setIsReplying(false);
@@ -642,14 +812,14 @@ export default function InboxPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--navy-dark)] text-white">
+    <main className="min-h-screen overflow-x-hidden bg-[var(--navy-dark)] text-white">
       <Navbar />
 
       <Container>
-        <div className="space-y-10 py-10 lg:py-14">
+        <div className="space-y-6 py-6 pb-[calc(env(safe-area-inset-bottom)+80px)] md:space-y-10 md:py-10 md:pb-10 lg:py-14">
           <BackToDashboardButton />
 
-          <div className="rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-8 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl">
+          <div className="hidden rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-8 shadow-[0_35px_90px_rgba(0,0,0,.30)] backdrop-blur-2xl md:block">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-sm uppercase tracking-[0.22em] text-white/40">
@@ -670,6 +840,7 @@ export default function InboxPage() {
                       type="button"
                       onClick={() => {
                         setView(tab);
+                        setIsMobileThreadOpen(false);
                         setActionFeedback(null);
                         setReplySuccessMessage(null);
                         setReplyDraft("");
@@ -691,9 +862,7 @@ export default function InboxPage() {
                       <p className="text-xs uppercase tracking-[0.16em] text-white/45">
                         Unread Conversations
                       </p>
-                      <p className="mt-1 text-lg font-semibold text-white">
-                        {unreadCount}
-                      </p>
+                      <p className="mt-1 text-lg font-semibold text-white">{unreadCount}</p>
                     </div>
                   </div>
                   <div className="inline-flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white/75">
@@ -718,7 +887,227 @@ export default function InboxPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.4fr)_minmax(0,0.6fr)]">
+          <div className="space-y-4 md:hidden">
+            <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(22,37,68,0.92),rgba(11,20,38,0.90))] p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] backdrop-blur-2xl">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/40">
+                Member Communications
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-white">Inbox</h1>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--text-muted)]">
+                Read every lead, reply quickly, and stay on top of messages from your phone.
+              </p>
+
+              <div className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 p-1">
+                {(["inbox", "archived"] as InboxView[]).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      setView(tab);
+                      setIsMobileThreadOpen(false);
+                      setActionFeedback(null);
+                      setReplySuccessMessage(null);
+                      setReplyDraft("");
+                    }}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      view === tab
+                        ? "bg-[var(--gold-main)] text-black shadow-[0_10px_30px_rgba(212,175,55,.25)]"
+                        : "text-white/55 hover:text-[var(--gold-main)]"
+                    }`}
+                  >
+                    {tab === "inbox" ? "Inbox" : "Archived"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-[var(--gold-main)]/25 bg-[rgba(212,175,55,0.10)] px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                    Unread Conversations
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-white">{unreadCount}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-white/45">
+                    Total Conversations
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-white">{conversations.length}</p>
+                </div>
+              </div>
+            </section>
+
+            {!isMobileThreadOpen ? (
+              <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
+                <div className="flex items-center justify-between gap-4 px-1 pb-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">
+                      {view === "archived" ? "Archived" : "Conversations"}
+                    </h2>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                      Tap a conversation to open the full thread.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                    {conversations.length} total
+                  </span>
+                </div>
+
+                {error ? (
+                  <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                    {error}
+                  </div>
+                ) : null}
+
+                {isLoading ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-10 text-center text-sm text-slate-300">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Loading your inbox...
+                    </div>
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-5 py-10 text-center text-sm text-slate-400">
+                    {view === "archived"
+                      ? "You have no archived conversations."
+                      : "You do not have any conversations yet."}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {conversations.map((conversation) => (
+                      <ConversationListItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        isSelected={selectedConversationId === conversation.id}
+                        onSelect={() =>
+                          void handleSelectConversation(conversation, {
+                            openMobileThread: true,
+                          })
+                        }
+                        showPreviewThread={false}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : selectedConversation ? (
+              <section className="flex min-h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,.25)] backdrop-blur-2xl">
+                <div className="border-b border-white/10 bg-[rgba(11,20,38,0.85)] px-4 py-4 backdrop-blur-xl">
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileThreadOpen(false)}
+                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
+                      aria-label="Back to conversations"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                        Conversation
+                      </p>
+                      <h2 className="mt-1 break-words text-lg font-semibold text-white">
+                        {selectedConversation.participantLabel}
+                      </h2>
+                      {selectedConversation.participantEmail ? (
+                        <p className="mt-1 break-words text-sm text-white/60">
+                          {selectedConversation.participantEmail}
+                        </p>
+                      ) : null}
+                      {selectedConversation.listingLabel ? (
+                        <p className="mt-2 break-words text-xs font-medium uppercase tracking-[0.16em] text-[var(--gold-main)]">
+                          {selectedConversation.listingLabel}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {view === "inbox" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleMarkAsUnread}
+                          disabled={selectedConversation.status === "unread"}
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[var(--gold-main)]/30 hover:text-[var(--gold-main)] disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          Mark as Unread
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleArchiveConversation}
+                          className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[var(--gold-main)]/30 hover:text-[var(--gold-main)]"
+                        >
+                          <Archive size={14} className="mr-2" />
+                          Archive
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleDeleteConversation}
+                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-red-400/25 bg-red-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-red-100 transition hover:border-red-300/40 hover:bg-red-400/15"
+                      >
+                        Delete Permanently
+                      </button>
+                    )}
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${getConversationStatusBadgeClass(
+                        selectedConversation.status
+                      )}`}
+                    >
+                      {selectedConversation.status}
+                    </span>
+                    <span className="inline-flex items-center text-xs text-white/45">
+                      {formatTimestamp(selectedConversation.latestMessage.created_at)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <ThreadMessages messages={selectedConversation.messages} mobile />
+                  <div ref={mobileThreadEndRef} />
+                </div>
+
+                <div className="sticky bottom-0 border-t border-white/10 bg-[rgba(11,20,38,0.92)] px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] backdrop-blur-xl">
+                  <div className="flex items-center gap-2">
+                    <Reply size={16} className="text-[var(--gold-main)]" />
+                    <p className="text-sm font-medium text-white/70">Reply via Email</p>
+                  </div>
+
+                  {replySuccessMessage ? (
+                    <p className="mt-3 text-sm text-emerald-200">{replySuccessMessage}</p>
+                  ) : null}
+
+                  <div className="mt-3 space-y-3">
+                    <textarea
+                      value={replyDraft}
+                      onChange={(event) => {
+                        setReplyDraft(event.target.value);
+                        if (replySuccessMessage) {
+                          setReplySuccessMessage(null);
+                        }
+                      }}
+                      rows={3}
+                      placeholder="Write a reply..."
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--gold-main)]/40"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleSendReply}
+                      disabled={replyDisabled}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <SendHorizontal size={16} />
+                      {isReplying ? "Sending..." : "Reply via Email"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+          </div>
+
+          <div className="hidden gap-6 md:grid xl:grid-cols-[minmax(340px,0.4fr)_minmax(0,0.6fr)]">
             <section className="rounded-[32px] border border-white/10 bg-white/5 p-5 backdrop-blur-2xl">
               <div className="flex items-center justify-between gap-4 px-2 pb-4">
                 <div>
@@ -757,102 +1146,15 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <div className="mt-2 space-y-2">
-                  {conversations.map((conversation) => {
-                    const isSelected = selectedConversationId === conversation.id;
-                    const previewThread = conversation.messages.slice(-3);
-
-                    return (
-                      <button
-                        key={conversation.id}
-                        type="button"
-                        onClick={() => void handleSelectConversation(conversation)}
-                        className={`w-full rounded-3xl border p-4 text-left transition duration-300 ${
-                          isSelected
-                            ? "border-[var(--gold-main)]/40 bg-[rgba(212,175,55,0.12)] shadow-[0_0_0_1px_rgba(212,175,55,0.12),0_16px_40px_rgba(212,175,55,.12)]"
-                            : conversation.status === "unread"
-                              ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.05))] hover:bg-white/[0.10]"
-                              : "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:bg-white/[0.08]"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-3">
-                              {conversation.status === "unread" ? (
-                                <span className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" />
-                              ) : null}
-                              <div className="min-w-0">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p
-                                    className={`truncate text-base ${
-                                      conversation.status === "unread"
-                                        ? "font-semibold text-white"
-                                        : "font-medium text-white/85"
-                                    }`}
-                                  >
-                                    {conversation.participantLabel}
-                                  </p>
-                                  <span className="shrink-0 text-xs text-white/45">
-                                    {formatTimestamp(conversation.latestMessage.created_at)}
-                                  </span>
-                                </div>
-
-                                {conversation.listingLabel ? (
-                                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-[var(--gold-main)]">
-                                    {conversation.listingLabel}
-                                  </p>
-                                ) : null}
-
-                                <p
-                                  className={`mt-2 text-sm ${
-                                    conversation.status === "unread"
-                                      ? "font-medium text-white/88"
-                                      : "text-[var(--text-muted)]"
-                                  }`}
-                                >
-                                  {getMessagePreview(conversation.latestMessage.body)}
-                                </p>
-
-                                <div className="mt-3 flex items-center gap-2">
-                                  <span
-                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${getConversationStatusBadgeClass(
-                                      conversation.status
-                                    )}`}
-                                  >
-                                    {conversation.status}
-                                  </span>
-                                  <span className="text-[11px] uppercase tracking-[0.14em] text-white/35">
-                                    {conversation.messages.length} messages
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {isSelected ? (
-                          <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                            {previewThread.map((message) => (
-                              <div
-                                key={message.id}
-                                className={`rounded-2xl px-3 py-2 text-sm ${
-                                  message.sender_type === "agent"
-                                    ? "bg-black/20 text-white/70"
-                                    : "bg-white/5 text-white/88"
-                                }`}
-                              >
-                                <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">
-                                  {message.sender_type === "agent" ? "Agent" : "Lead"}
-                                </p>
-                                <p className="mt-1 line-clamp-2 leading-6">
-                                  {message.body}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </button>
-                    );
-                  })}
+                  {conversations.map((conversation) => (
+                    <ConversationListItem
+                      key={conversation.id}
+                      conversation={conversation}
+                      isSelected={selectedConversationId === conversation.id}
+                      onSelect={() => void handleSelectConversation(conversation)}
+                      showPreviewThread={selectedConversationId === conversation.id}
+                    />
+                  ))}
                 </div>
               )}
             </section>
@@ -865,8 +1167,8 @@ export default function InboxPage() {
                       Select a conversation to view details
                     </p>
                     <p className="mt-3 max-w-md text-sm leading-7 text-[var(--text-muted)]">
-                      Choose a conversation from the list to review the full thread
-                      and draft a reply.
+                      Choose a conversation from the list to review the full thread and
+                      draft a reply.
                     </p>
                   </div>
                 </div>
@@ -933,45 +1235,15 @@ export default function InboxPage() {
                     {selectedConversation.listingLabel ? (
                       <div>
                         <p className="text-base font-medium text-white">Property:</p>
-                        <p className="mt-2 text-lg text-white/88">
+                        <p className="mt-2 break-words text-lg text-white/88">
                           {selectedConversation.listingLabel}
                         </p>
                       </div>
                     ) : null}
 
-                    <div className="mt-5 space-y-4">
-                      {selectedConversation.messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.sender_type === "agent"
-                              ? "justify-end"
-                              : "justify-start"
-                          }`}
-                        >
-                          <div
-                            className={`max-w-[85%] rounded-3xl px-5 py-4 ${
-                              message.sender_type === "agent"
-                                ? "border border-slate-400/20 bg-[rgba(148,163,184,0.16)] text-white shadow-[0_12px_30px_rgba(148,163,184,0.10)]"
-                                : "border border-sky-400/25 bg-[rgba(56,189,248,0.14)] text-white/92 shadow-[0_12px_30px_rgba(56,189,248,0.10)]"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                                {message.sender_type === "client"
-                                  ? "CLIENT MESSAGE"
-                                  : "AGENT REPLY"}
-                              </p>
-                              <span className="text-xs text-white/35">
-                                {formatTimestamp(message.created_at)}
-                              </span>
-                            </div>
-                            <p className="mt-3 whitespace-pre-wrap text-sm leading-7">
-                              {message.body}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="mt-5">
+                      <ThreadMessages messages={selectedConversation.messages} mobile={false} />
+                      <div ref={desktopThreadEndRef} />
                     </div>
                   </div>
 
@@ -999,19 +1271,13 @@ export default function InboxPage() {
                       />
 
                       {replySuccessMessage ? (
-                        <p className="text-sm text-emerald-200">
-                          {replySuccessMessage}
-                        </p>
+                        <p className="text-sm text-emerald-200">{replySuccessMessage}</p>
                       ) : null}
 
                       <button
                         type="button"
                         onClick={handleSendReply}
-                        disabled={
-                          !replyDraft.trim() ||
-                          isReplying ||
-                          !selectedConversation.participantEmail
-                        }
+                        disabled={replyDisabled}
                         className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--gold-main)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--gold-soft)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <SendHorizontal size={16} />
