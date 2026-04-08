@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FileBadge2, MapPin, Search, Star } from 'lucide-react';
 import LeadMessageButton from '@/components/public/LeadMessageButton';
@@ -74,11 +75,13 @@ function AgentCard({
         aria-expanded={isExpanded}
       >
         <div className="mb-6 flex justify-center">
-          <div className="w-[240px] overflow-hidden rounded-2xl border border-white/10">
-            <div className="aspect-[4/3] w-full">
-              <img
+          <div className="w-full max-w-[240px] overflow-hidden rounded-2xl border border-white/10">
+            <div className="relative aspect-[3/4] w-full">
+              <Image
                 src={agent.image || '/images/agent-1.jpg'}
                 alt={agent.name}
+                fill
+                sizes="(max-width: 640px) 70vw, 240px"
                 className="h-full w-full object-cover object-center transition duration-500 group-hover:scale-105"
               />
             </div>
