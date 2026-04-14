@@ -173,7 +173,13 @@ export default function HowItWorksPage() {
                 <ArrowRight size={20} />
               </Link>
 
-              <Link href="/contact" className="rounded-full border border-white/15 px-10 py-5 font-semibold text-white transition hover:bg-white/5">
+              <Link
+                href="https://scheduler.zoom.us/peter-magana/30-mins-with-peter"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-cta="book-call"
+                className="rounded-full border border-white/15 px-10 py-5 font-semibold text-white transition hover:bg-white/5"
+              >
                 Talk to Our Team
               </Link>
             </div>
